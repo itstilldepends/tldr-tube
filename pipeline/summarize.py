@@ -141,24 +141,30 @@ def summarize_transcript(
             lines = response_text.split("\n")
             response_text = "\n".join(lines[1:-1]) if len(lines) > 2 else response_text
 
-        # Clean Chinese quotation marks BEFORE parsing
-        # Replace them with safe alternatives that won't break JSON structure
-        response_text = response_text.replace('"', '『').replace('"', '』')  # Chinese double quotes → 『』
-        response_text = response_text.replace(''', '〔').replace(''', '〕')  # Chinese single quotes → 〔〕
-        response_text = response_text.replace('「', '【').replace('」', '】')  # Japanese quotes → 【】
-
-        # Try to parse as JSON first
+        # Try to parse as JSON first (standard format)
         try:
             result = json.loads(response_text)
-        except json.JSONDecodeError:
-            # If JSON parsing fails, Claude might have returned Python dict with single quotes
-            # Try to parse as Python literal and convert to JSON
+        except json.JSONDecodeError as json_error:
+            # JSON parsing failed, try alternate strategies
+
+            # Strategy 1: Claude might have used Python dict syntax (single quotes)
+            # Try parsing with ast.literal_eval BEFORE cleaning Chinese quotes
             try:
                 python_dict = ast.literal_eval(response_text)
-                result = json.loads(json.dumps(python_dict))
+                result = python_dict
             except:
-                # If both fail, raise the original JSON error
-                raise
+                # Strategy 2: Clean Chinese quotation marks and retry JSON parsing
+                # Remove Chinese quotes entirely (safest approach)
+                cleaned_text = response_text
+                cleaned_text = cleaned_text.replace('"', '').replace('"', '')  # Remove Chinese double quotes
+                cleaned_text = cleaned_text.replace(''', "'").replace(''', "'")  # Chinese single → English single
+                cleaned_text = cleaned_text.replace('「', '').replace('」', '')  # Remove Japanese quotes
+
+                try:
+                    result = json.loads(cleaned_text)
+                except:
+                    # If all strategies fail, raise original error with helpful message
+                    raise json_error
 
         # Validate response structure
         required_fields = ["video_type", "tldr", "tldr_zh", "segments"]
