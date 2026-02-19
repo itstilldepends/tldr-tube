@@ -33,3 +33,6 @@ Thumbs.db
 *.egg-info/
 dist/
 build/
+
+# Local scripts (not committed)
+run.sh
