@@ -37,10 +37,11 @@ def transcribe_audio(audio_path: str, language: str = None) -> List[Dict]:
         It will not work on Intel Macs or non-macOS systems.
     """
     try:
-        # mlx-whisper uses the "base" model by default
-        # Can be changed to "small", "medium", "large" for better accuracy (but slower)
+        # Using "medium" model for better accuracy
+        # Options: "tiny" (39MB), "base" (140MB), "small" (244MB), "medium" (769MB), "large" (1.5GB)
         result = mlx_whisper.transcribe(
             audio_path,
+            path_or_hf_repo="medium",  # Higher accuracy than base, good balance
             language=language,
             word_timestamps=False,  # We use segment timestamps, not word-level
         )

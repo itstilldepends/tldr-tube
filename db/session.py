@@ -6,7 +6,7 @@ Provides Session factory and init_db() function.
 """
 
 import os
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, text
 from sqlalchemy.orm import sessionmaker
 from dotenv import load_dotenv
 
@@ -28,7 +28,7 @@ if DATABASE_URL.startswith("sqlite"):
     )
     # Enable WAL mode for SQLite
     with engine.connect() as conn:
-        conn.execute("PRAGMA journal_mode=WAL;")
+        conn.execute(text("PRAGMA journal_mode=WAL;"))
         conn.commit()
 else:
     # For PostgreSQL or other databases
