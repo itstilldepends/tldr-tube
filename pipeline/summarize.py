@@ -79,7 +79,7 @@ def restore_punctuation(transcript: List[Dict]) -> List[Dict]:
 def summarize_transcript(
     transcript: List[Dict],
     video_id: str
-) -> Tuple[str, str, List[Dict]]:
+) -> Tuple[str, str, str, List[Dict]]:
     """
     Generate TL;DR and segmented summaries for a video transcript.
 
@@ -94,24 +94,28 @@ def summarize_transcript(
     Returns:
         Tuple of:
         - video_type: str ("tutorial" | "podcast" | "lecture" | "other")
-        - tldr: str (5-7 sentence overall summary)
+        - tldr: str (5-7 sentence overall summary in English)
+        - tldr_zh: str (5-7 sentence overall summary in Chinese)
         - segments: List[Dict] with keys:
             - start_seconds: float
             - end_seconds: float
-            - summary: str
+            - summary: str (English)
+            - summary_zh: str (Chinese)
 
     Raises:
         Exception: If Claude API call fails or returns invalid JSON
 
     Example:
         >>> transcript = [...]  # from fetch_youtube_transcript()
-        >>> video_type, tldr, segments = summarize_transcript(transcript, "abc123")
+        >>> video_type, tldr, tldr_zh, segments = summarize_transcript(transcript, "abc123")
         >>> print(video_type)
         'tutorial'
         >>> print(tldr)
         'This video teaches...'
+        >>> print(tldr_zh)
+        '这个视频讲解了...'
         >>> print(segments[0])
-        {'start_seconds': 0.0, 'end_seconds': 285.5, 'summary': '...'}
+        {'start_seconds': 0.0, 'end_seconds': 285.5, 'summary': '...', 'summary_zh': '...'}
     """
     # Format transcript for LLM
     formatted_transcript = format_transcript_for_llm(transcript)
@@ -139,11 +143,13 @@ def summarize_transcript(
         result = json.loads(response_text)
 
         # Validate response structure
-        if "video_type" not in result or "tldr" not in result or "segments" not in result:
-            raise ValueError("Claude response missing required fields")
+        required_fields = ["video_type", "tldr", "tldr_zh", "segments"]
+        if not all(field in result for field in required_fields):
+            raise ValueError(f"Claude response missing required fields. Got: {list(result.keys())}")
 
         video_type = result["video_type"]
         tldr = result["tldr"]
+        tldr_zh = result["tldr_zh"]
         segments = result["segments"]
 
         # Validate video_type
@@ -153,10 +159,11 @@ def summarize_transcript(
 
         # Validate segments
         for segment in segments:
-            if "start_seconds" not in segment or "end_seconds" not in segment or "summary" not in segment:
-                raise ValueError("Segment missing required fields")
+            required_segment_fields = ["start_seconds", "end_seconds", "summary", "summary_zh"]
+            if not all(field in segment for field in required_segment_fields):
+                raise ValueError(f"Segment missing required fields. Got: {list(segment.keys())}")
 
-        return video_type, tldr, segments
+        return video_type, tldr, tldr_zh, segments
 
     except json.JSONDecodeError as e:
         raise Exception(f"Failed to parse Claude response as JSON for video {video_id}: {str(e)}\n\nResponse: {response_text}")

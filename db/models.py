@@ -52,7 +52,11 @@ class Video(Base):
     # Content
     raw_transcript = Column(Text, nullable=False)  # JSON string: [{"start": ..., "duration": ..., "text": ...}]
     video_type = Column(String(50), nullable=False)  # "tutorial" | "podcast" | "lecture" | "other"
-    tldr = Column(Text, nullable=False)
+
+    # Summaries (bilingual)
+    tldr = Column(Text, nullable=False)             # English TL;DR
+    tldr_zh = Column(Text, nullable=False)          # Chinese TL;DR
+
     transcript_source = Column(String(50), nullable=False)  # "youtube_api" | "whisper"
 
     # Collection relationship
@@ -83,8 +87,9 @@ class Segment(Base):
     end_seconds = Column(Float, nullable=False)
     timestamp = Column(String(20), nullable=False)  # "MM:SS" format for display
 
-    # Content
-    summary = Column(Text, nullable=False)
+    # Content (bilingual)
+    summary = Column(Text, nullable=False)          # English summary
+    summary_zh = Column(Text, nullable=False)       # Chinese summary
 
     # Relationships
     video = relationship("Video", back_populates="segments")

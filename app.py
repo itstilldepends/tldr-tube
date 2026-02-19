@@ -83,37 +83,56 @@ def render_video_result(video: Video):
     with col3:
         st.caption(f"📝 Transcript: {video.transcript_source}")
 
-    # TL;DR
     st.markdown("---")
-    st.markdown("### 📋 TL;DR")
-    st.info(video.tldr)
 
-    # Segments
-    st.markdown("---")
-    st.markdown("### 🕒 Timeline")
+    # Language tabs
+    tab_en, tab_zh = st.tabs(["🇬🇧 English", "🇨🇳 中文"])
 
     # Get segments
     with get_session() as session:
         segments = session.query(Segment).filter_by(video_id=video.id).order_by(Segment.start_seconds).all()
 
-    for segment in segments:
-        # Create clickable YouTube timestamp link
-        youtube_link = f"{video.source_url}&t={int(segment.start_seconds)}s"
+    # English tab
+    with tab_en:
+        st.markdown("### 📋 TL;DR")
+        st.info(video.tldr)
 
-        # Format time range
-        end_timestamp = f"{int(segment.end_seconds // 60):02d}:{int(segment.end_seconds % 60):02d}"
-        time_range = f"{segment.timestamp} - {end_timestamp}"
+        st.markdown("---")
+        st.markdown("### 🕒 Timeline")
 
-        # Display segment
-        with st.container():
-            col1, col2 = st.columns([1, 5])
-            with col1:
-                st.markdown(f"**[{segment.timestamp}]({youtube_link})**")
-                st.caption(f"to {end_timestamp}")
-            with col2:
-                st.markdown(segment.summary)
+        for segment in segments:
+            youtube_link = f"{video.source_url}&t={int(segment.start_seconds)}s"
+            end_timestamp = f"{int(segment.end_seconds // 60):02d}:{int(segment.end_seconds % 60):02d}"
 
-            st.markdown("")  # Spacing
+            with st.container():
+                col1, col2 = st.columns([1, 5])
+                with col1:
+                    st.markdown(f"**[{segment.timestamp}]({youtube_link})**")
+                    st.caption(f"to {end_timestamp}")
+                with col2:
+                    st.markdown(segment.summary)
+                st.markdown("")
+
+    # Chinese tab
+    with tab_zh:
+        st.markdown("### 📋 概要")
+        st.info(video.tldr_zh)
+
+        st.markdown("---")
+        st.markdown("### 🕒 时间线")
+
+        for segment in segments:
+            youtube_link = f"{video.source_url}&t={int(segment.start_seconds)}s"
+            end_timestamp = f"{int(segment.end_seconds // 60):02d}:{int(segment.end_seconds % 60):02d}"
+
+            with st.container():
+                col1, col2 = st.columns([1, 5])
+                with col1:
+                    st.markdown(f"**[{segment.timestamp}]({youtube_link})**")
+                    st.caption(f"至 {end_timestamp}")
+                with col2:
+                    st.markdown(segment.summary_zh)
+                st.markdown("")
 
 
 def view_new_video():

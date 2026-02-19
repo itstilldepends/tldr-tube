@@ -127,9 +127,9 @@ def process_youtube_video(
         update_status("Punctuation restored", "success")
 
     # Step 5: Summarize with Claude
-    update_status("Generating summary with Claude AI", "running")
-    video_type, tldr, segments = summarize_transcript(transcript, video_id)
-    update_status(f"Summary generated (type: {video_type}, {len(segments)} segments)", "success")
+    update_status("Generating bilingual summary with Claude AI", "running")
+    video_type, tldr, tldr_zh, segments = summarize_transcript(transcript, video_id)
+    update_status(f"Summary generated (type: {video_type}, {len(segments)} segments, EN+ZH)", "success")
 
     # Step 6: Persist to database
     update_status("Saving to database", "running")
@@ -149,6 +149,7 @@ def process_youtube_video(
         raw_transcript=raw_transcript_json,
         video_type=video_type,
         tldr=tldr,
+        tldr_zh=tldr_zh,
         transcript_source=transcript_source,
         collection_id=collection_id,
         order_index=order_index,
@@ -162,7 +163,8 @@ def process_youtube_video(
             start_seconds=seg["start_seconds"],
             end_seconds=seg["end_seconds"],
             timestamp=format_timestamp(seg["start_seconds"]),
-            summary=seg["summary"]
+            summary=seg["summary"],
+            summary_zh=seg["summary_zh"]
         ))
 
     # Save to database

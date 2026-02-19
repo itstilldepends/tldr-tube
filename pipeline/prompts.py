@@ -18,21 +18,23 @@ Transcript:
 {transcript}
 """
 
-# Main summarization prompt - generates video_type, TL;DR, and segments in one call
+# Main summarization prompt - generates bilingual (EN + ZH) summaries
 SUMMARIZATION_PROMPT = """
-You are analyzing a video transcript with timestamps to generate a structured summary.
+You are analyzing a video transcript with timestamps to generate a bilingual structured summary (English and Chinese).
 
 **Input**: Complete video transcript with precise timestamps
 **Output**: JSON object with the following structure
 
 {{
   "video_type": "tutorial" | "podcast" | "lecture" | "other",
-  "tldr": "5-7 sentence overall summary of the entire video",
+  "tldr": "5-7 sentence overall summary of the entire video in English",
+  "tldr_zh": "5-7句中文整体总结",
   "segments": [
     {{
       "start_seconds": 0.0,
       "end_seconds": 285.5,
-      "summary": "Concise 3-5 sentence summary of this time segment"
+      "summary": "Concise 3-5 sentence summary in English",
+      "summary_zh": "简洁的3-5句中文总结"
     }},
     ...
   ]
@@ -46,23 +48,30 @@ You are analyzing a video transcript with timestamps to generate a structured su
    - "lecture": Educational, academic, structured teaching
    - "other": Everything else
 
-2. **tldr**: Write a 5-7 sentence summary capturing:
+2. **tldr** (English): Write a 5-7 sentence summary capturing:
    - Main topic and purpose
    - Key points covered
    - Conclusions or takeaways
    - Keep it concise but informative
 
-3. **segments**: Divide the video into logical segments
+3. **tldr_zh** (Chinese): Write the same summary in Chinese
+   - 用简洁的中文总结视频主要内容
+   - 5-7句话
+   - 涵盖主题、要点和结论
+
+4. **segments**: Divide the video into logical segments
    - Each segment should be 3-5 minutes long (adjust based on natural topic breaks)
    - Segments should align with content shifts, not arbitrary time intervals
-   - Each summary should be 3-5 sentences
+   - Each segment needs BOTH English and Chinese summaries:
+     - **summary** (English): Concise 3-5 sentence summary
+     - **summary_zh** (Chinese): 简洁的3-5句中文总结
    - **IMPORTANT**: You can see the entire transcript, so maintain coherence
      - Reference concepts introduced earlier
      - Note connections between segments
      - Preserve narrative flow
    - Use exact start/end times from the transcript
 
-4. **Output format**:
+5. **Output format**:
    - Return ONLY valid JSON
    - Do NOT wrap in markdown code blocks
    - Do NOT add any commentary or explanation
