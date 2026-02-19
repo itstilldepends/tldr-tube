@@ -78,8 +78,8 @@ You are analyzing a video transcript with timestamps to generate a bilingual str
    - Do NOT add any commentary or explanation
    - **CRITICAL**: In Chinese text, do NOT use Chinese quotation marks (""''「」)
    - For quotes within Chinese text, use alternative characters like 『』 or just remove them
-   - Example of CORRECT format: {"key": "value"}
-   - Example of WRONG format: {'key': 'value'}
+   - Example of CORRECT format: {{"key": "value"}}
+   - Example of WRONG format: {{'key': 'value'}}
 
 **Transcript**:
 {transcript}
