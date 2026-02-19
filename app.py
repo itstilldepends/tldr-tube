@@ -270,9 +270,9 @@ def view_new_collection():
 def main():
     """Main app entry point."""
 
-    # Initialize database
-    if not os.path.exists("./data/tldr_tube.db"):
-        init_db()
+    # Initialize database (creates tables if they don't exist)
+    # This is idempotent - safe to call every time
+    init_db()
 
     # Check password
     if not check_password():

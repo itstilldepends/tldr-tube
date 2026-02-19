@@ -71,10 +71,7 @@ pip install -r requirements.txt
 cp .env.example .env
 # Edit .env and add your ANTHROPIC_API_KEY and APP_PASSWORD
 
-# Initialize database
-python -m db.session
-
-# Run the app
+# Run the app (database tables will be created automatically on first run)
 streamlit run app.py
 ```
 
