@@ -69,23 +69,40 @@ def download_audio(url: str, output_path: str) -> str:
     Example:
         >>> audio_path = download_audio("https://youtu.be/xxx", "./data/audio/")
         >>> print(audio_path)
-        './data/audio/xxx.m4a'
+        './data/audio/xxx.webm'
     """
+    import os
+
     ydl_opts = {
+        # Download best audio format available (usually webm or m4a)
         "format": "bestaudio/best",
-        "postprocessors": [{
-            "key": "FFmpegExtractAudio",
-            "preferredcodec": "m4a",
-        }],
+        # Save as: output_path/video_id.ext
         "outtmpl": f"{output_path}/%(id)s.%(ext)s",
         "quiet": True,
         "no_warnings": True,
+        # Don't use postprocessors - mlx-whisper can handle various formats
+        # This avoids ffmpeg conversion issues
     }
 
     try:
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
             info = ydl.extract_info(url, download=True)
             video_id = info["id"]
-            return f"{output_path}/{video_id}.m4a"
+
+            # Get the actual downloaded file extension
+            # Usually webm, m4a, or opus
+            requested_downloads = info.get("requested_downloads", [])
+            if requested_downloads:
+                filepath = requested_downloads[0]["filepath"]
+                return filepath
+            else:
+                # Fallback: try common extensions
+                for ext in ["webm", "m4a", "opus", "mp3"]:
+                    potential_path = f"{output_path}/{video_id}.{ext}"
+                    if os.path.exists(potential_path):
+                        return potential_path
+
+                # If still not found, raise error
+                raise Exception(f"Downloaded file not found for video {video_id}")
     except Exception as e:
         raise Exception(f"Failed to download audio for {url}: {str(e)}")
