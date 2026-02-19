@@ -140,6 +140,12 @@ def summarize_transcript(
             lines = response_text.split("\n")
             response_text = "\n".join(lines[1:-1]) if len(lines) > 2 else response_text
 
+        # Clean Chinese quotation marks that break JSON parsing
+        # Replace Chinese quotes with English single quotes (safe for JSON strings)
+        response_text = response_text.replace('"', "'").replace('"', "'")  # Chinese double quotes → single quotes
+        response_text = response_text.replace(''', "'").replace(''', "'")  # Chinese single quotes
+        response_text = response_text.replace('「', "'").replace('」', "'")  # Japanese-style quotes
+
         result = json.loads(response_text)
 
         # Validate response structure

@@ -76,6 +76,9 @@ You are analyzing a video transcript with timestamps to generate a bilingual str
    - Do NOT wrap in markdown code blocks
    - Do NOT add any commentary or explanation
    - Ensure all quotes are properly escaped
+   - **CRITICAL**: In Chinese text, do NOT use Chinese quotation marks (""''「」)
+   - Always use English quotes ("") and escape them properly in JSON
+   - For Chinese quotes, use single English quotes ('') or just remove quotes
 
 **Transcript**:
 {transcript}
