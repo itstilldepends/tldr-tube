@@ -45,6 +45,9 @@ class Video(Base):
 
     # Metadata
     title = Column(String(500), nullable=False)
+    description = Column(Text, nullable=True)       # Video description (can be long, useful for search/context)
+    upload_date = Column(String(20), nullable=True)  # Upload date in YYYY-MM-DD format
+    tags = Column(Text, nullable=True)              # Tags as JSON array string
     duration_seconds = Column(Integer, nullable=True)
     channel_name = Column(String(255), nullable=True)
     thumbnail_url = Column(String(1000), nullable=True)

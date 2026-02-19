@@ -42,8 +42,22 @@ def fetch_video_metadata(url: str) -> Dict[str, any]:
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
             info = ydl.extract_info(url, download=False)
 
+            # Format upload date to YYYY-MM-DD if available
+            upload_date = info.get("upload_date")
+            if upload_date:
+                # yt-dlp returns YYYYMMDD, convert to YYYY-MM-DD
+                upload_date = f"{upload_date[:4]}-{upload_date[4:6]}-{upload_date[6:8]}"
+
+            # Get tags as JSON array
+            tags = info.get("tags", [])
+            import json
+            tags_json = json.dumps(tags, ensure_ascii=False) if tags else None
+
             return {
                 "title": info.get("title", "Unknown Title"),
+                "description": info.get("description", ""),
+                "upload_date": upload_date,
+                "tags": tags_json,
                 "duration_seconds": info.get("duration", 0),
                 "channel_name": info.get("uploader", "Unknown Channel"),
                 "thumbnail_url": info.get("thumbnail", ""),

@@ -72,16 +72,60 @@ def render_video_result(video: Video):
     # Header with metadata
     st.markdown(f"## 🎬 {video.title}")
 
-    col1, col2, col3 = st.columns(3)
+    # Basic metadata row
+    col1, col2, col3, col4 = st.columns(4)
     with col1:
         st.caption(f"📺 {video.channel_name}")
     with col2:
+        if video.upload_date:
+            st.caption(f"📅 {video.upload_date}")
+    with col3:
         if video.duration_seconds:
             duration_min = video.duration_seconds // 60
             duration_sec = video.duration_seconds % 60
             st.caption(f"⏱️ {duration_min}:{duration_sec:02d}")
-    with col3:
-        st.caption(f"📝 Transcript: {video.transcript_source}")
+    with col4:
+        st.caption(f"📝 {video.transcript_source}")
+
+    # Tags (if available)
+    if video.tags:
+        import json
+        try:
+            tags_list = json.loads(video.tags)
+            if tags_list:
+                st.caption("🏷️ " + " • ".join([f"`{tag}`" for tag in tags_list[:10]]))  # Show first 10 tags
+        except:
+            pass
+
+    # Video description (collapsible)
+    if video.description:
+        with st.expander("📄 Video Description", expanded=False):
+            st.markdown(video.description)
+
+    # Full transcript viewer (collapsible)
+    with st.expander("📜 View Full Transcript", expanded=False):
+        try:
+            transcript_data = json.loads(video.raw_transcript)
+            st.caption(f"Total segments: {len(transcript_data)}")
+
+            # Display transcript with timestamps
+            transcript_text = ""
+            for entry in transcript_data:
+                from pipeline.utils import format_timestamp
+                timestamp = format_timestamp(entry["start"])
+                transcript_text += f"**[{timestamp}]** {entry['text']}\n\n"
+
+            st.markdown(transcript_text)
+
+            # Download button
+            st.download_button(
+                label="💾 Download Transcript (TXT)",
+                data=transcript_text,
+                file_name=f"{video.video_id}_transcript.txt",
+                mime="text/plain"
+            )
+        except Exception as e:
+            st.error(f"Failed to load transcript: {str(e)}")
 
     st.markdown("---")
 
