@@ -142,11 +142,28 @@ def view_new_video():
                 st.success("✅ Video already processed! Showing cached result:")
                 render_video_result(existing)
             else:
-                # Process new video
-                with st.spinner("🔄 Processing video... This may take 1-2 minutes."):
-                    video = process_youtube_video(url)
+                # Process new video with progress tracking
+                status_container = st.status("🔄 Processing video...", expanded=True)
+                steps = []
 
-                st.success("✅ Video processed successfully!")
+                def update_status(step: str, state: str):
+                    """Callback to update UI status."""
+                    if state == "running":
+                        steps.append({"step": step, "state": "running"})
+                        with status_container:
+                            st.write(f"⏳ {step}...")
+                    elif state == "success":
+                        # Update the last running step or add new success
+                        with status_container:
+                            st.write(f"✅ {step}")
+                    elif state == "error":
+                        with status_container:
+                            st.write(f"❌ {step}")
+
+                # Process video with status callback
+                video = process_youtube_video(url, status_callback=update_status)
+
+                status_container.update(label="✅ Video processed successfully!", state="complete", expanded=False)
                 render_video_result(video)
 
         except Exception as e:

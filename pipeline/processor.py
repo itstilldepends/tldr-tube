@@ -6,7 +6,7 @@ Orchestrates all steps: metadata fetch → transcript → summarization → DB s
 
 import os
 import json
-from typing import Dict, Optional
+from typing import Dict, Optional, Callable
 from datetime import datetime
 
 from db.session import get_session
@@ -21,7 +21,8 @@ from pipeline.summarize import restore_punctuation, summarize_transcript
 def process_youtube_video(
     url: str,
     collection_id: Optional[int] = None,
-    order_index: Optional[int] = None
+    order_index: Optional[int] = None,
+    status_callback: Optional[Callable[[str, str], None]] = None
 ) -> Video:
     """
     Process a YouTube video through the complete pipeline.
@@ -39,6 +40,7 @@ def process_youtube_video(
         url: YouTube video URL
         collection_id: Optional - ID of collection this video belongs to
         order_index: Optional - Order within collection
+        status_callback: Optional - Callback function(step: str, status: str) to report progress
 
     Returns:
         Video object with all fields populated
@@ -53,50 +55,64 @@ def process_youtube_video(
         >>> print(video.tldr)
         'This lecture introduces...'
     """
+    # Helper function to update status
+    def update_status(step: str, status: str = "running"):
+        if status_callback:
+            status_callback(step, status)
+        # Keep print for terminal debugging
+        if status == "running":
+            print(f"  ⏳ {step}...")
+        elif status == "success":
+            print(f"  ✅ {step}")
+        elif status == "error":
+            print(f"  ❌ {step}")
+
     # Step 1: Extract video_id and check cache
+    update_status("Extracting video ID", "running")
     video_id = extract_video_id(url)
 
     with get_session() as session:
         existing = session.query(Video).filter_by(video_id=video_id).first()
         if existing:
-            print(f"✅ Video {video_id} found in cache, returning existing result")
+            update_status("Found in cache, returning existing result", "success")
             return existing
 
-    print(f"📹 Processing new video: {video_id}")
+    update_status(f"Starting to process video: {video_id}", "success")
 
     # Step 2: Fetch metadata
-    print(f"  ⏱️  Fetching metadata...")
+    update_status("Fetching video metadata", "running")
     metadata = fetch_video_metadata(url)
-    print(f"  ✅ Title: {metadata['title']}")
+    update_status(f"Metadata fetched: {metadata['title']}", "success")
 
     # Step 3: Fetch transcript
     transcript = None
     transcript_source = None
     is_auto_generated = False
 
-    print(f"  📝 Fetching transcript...")
+    update_status("Fetching transcript from YouTube", "running")
     try:
         # Try YouTube transcript API first
         transcript, is_auto_generated = fetch_youtube_transcript(video_id)
         transcript_source = "youtube_api"
-        print(f"  ✅ Transcript fetched from YouTube ({'auto-generated' if is_auto_generated else 'manual'})")
+        caption_type = "auto-generated" if is_auto_generated else "manual"
+        update_status(f"Transcript fetched from YouTube ({caption_type})", "success")
     except Exception as e:
         # Fallback to Whisper
-        print(f"  ⚠️  YouTube transcript not available: {str(e)}")
-        print(f"  🎤 Downloading audio for Whisper transcription...")
+        update_status("YouTube transcript not available, using Whisper ASR", "running")
 
         # Create temp directory for audio
         audio_dir = "./data/audio"
         os.makedirs(audio_dir, exist_ok=True)
 
+        update_status("Downloading audio for transcription", "running")
         audio_path = download_audio(url, audio_dir)
-        print(f"  ✅ Audio downloaded: {audio_path}")
+        update_status("Audio downloaded successfully", "success")
 
-        print(f"  🎤 Transcribing with mlx-whisper...")
+        update_status("Transcribing with mlx-whisper (medium model)", "running")
         transcript = transcribe_audio(audio_path)
         transcript_source = "whisper"
         is_auto_generated = False  # Whisper output has punctuation
-        print(f"  ✅ Transcription complete")
+        update_status("Transcription complete", "success")
 
         # Clean up audio file
         try:
@@ -106,17 +122,17 @@ def process_youtube_video(
 
     # Step 4: Restore punctuation if auto-generated
     if is_auto_generated:
-        print(f"  🔧 Restoring punctuation in auto-generated transcript...")
+        update_status("Restoring punctuation (auto-generated transcript)", "running")
         transcript = restore_punctuation(transcript)
-        print(f"  ✅ Punctuation restored")
+        update_status("Punctuation restored", "success")
 
     # Step 5: Summarize with Claude
-    print(f"  🤖 Generating summary with Claude...")
+    update_status("Generating summary with Claude AI", "running")
     video_type, tldr, segments = summarize_transcript(transcript, video_id)
-    print(f"  ✅ Summary generated (type: {video_type}, {len(segments)} segments)")
+    update_status(f"Summary generated (type: {video_type}, {len(segments)} segments)", "success")
 
     # Step 6: Persist to database
-    print(f"  💾 Saving to database...")
+    update_status("Saving to database", "running")
 
     # Prepare raw transcript as JSON string
     raw_transcript_json = json.dumps(transcript, ensure_ascii=False)
@@ -162,8 +178,8 @@ def process_youtube_video(
         session.commit()
         session.refresh(video)  # Refresh to get relationships
 
-    print(f"  ✅ Saved to database (ID: {video.id})")
-    print(f"✅ Processing complete!")
+    update_status(f"Saved to database (ID: {video.id})", "success")
+    update_status("Processing complete!", "success")
 
     return video
 
