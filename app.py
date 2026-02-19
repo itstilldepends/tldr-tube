@@ -5,13 +5,14 @@ YouTube video summarizer with timestamp-anchored summaries.
 """
 
 import os
+import json
 import streamlit as st
 from dotenv import load_dotenv
 
 from db.session import init_db, get_session
 from db.models import Video, Segment, Collection
 from pipeline.processor import process_youtube_video, get_all_videos, delete_video
-from pipeline.utils import validate_youtube_url, extract_video_id
+from pipeline.utils import validate_youtube_url, extract_video_id, format_timestamp
 
 # Load environment variables
 load_dotenv()
@@ -89,7 +90,6 @@ def render_video_result(video: Video):
 
     # Tags (if available)
     if video.tags:
-        import json
         try:
             tags_list = json.loads(video.tags)
             if tags_list:
@@ -111,7 +111,6 @@ def render_video_result(video: Video):
             # Display transcript with timestamps
             transcript_text = ""
             for entry in transcript_data:
-                from pipeline.utils import format_timestamp
                 timestamp = format_timestamp(entry["start"])
                 transcript_text += f"**[{timestamp}]** {entry['text']}\n\n"
 
