@@ -72,13 +72,14 @@ You are analyzing a video transcript with timestamps to generate a bilingual str
    - Use exact start/end times from the transcript
 
 5. **Output format**:
-   - Return ONLY valid JSON
-   - Do NOT wrap in markdown code blocks
+   - Return ONLY valid JSON (RFC 8259 compliant)
+   - **CRITICAL**: Use DOUBLE QUOTES (") for all keys and string values, NOT single quotes (')
+   - Do NOT wrap in markdown code blocks (no ```json```)
    - Do NOT add any commentary or explanation
-   - Ensure all quotes are properly escaped
    - **CRITICAL**: In Chinese text, do NOT use Chinese quotation marks (""''「」)
-   - Always use English quotes ("") and escape them properly in JSON
-   - For Chinese quotes, use single English quotes ('') or just remove quotes
+   - For quotes within Chinese text, use alternative characters like 『』 or just remove them
+   - Example of CORRECT format: {"key": "value"}
+   - Example of WRONG format: {'key': 'value'}
 
 **Transcript**:
 {transcript}

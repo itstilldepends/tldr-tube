@@ -8,6 +8,7 @@ Functions:
 
 import os
 import json
+import ast
 from typing import List, Dict, Tuple
 from anthropic import Anthropic
 from dotenv import load_dotenv
@@ -140,13 +141,24 @@ def summarize_transcript(
             lines = response_text.split("\n")
             response_text = "\n".join(lines[1:-1]) if len(lines) > 2 else response_text
 
-        # Clean Chinese quotation marks that break JSON parsing
-        # Replace Chinese quotes with English single quotes (safe for JSON strings)
-        response_text = response_text.replace('"', "'").replace('"', "'")  # Chinese double quotes → single quotes
-        response_text = response_text.replace(''', "'").replace(''', "'")  # Chinese single quotes
-        response_text = response_text.replace('「', "'").replace('」', "'")  # Japanese-style quotes
+        # Clean Chinese quotation marks BEFORE parsing
+        # Replace them with safe alternatives that won't break JSON structure
+        response_text = response_text.replace('"', '『').replace('"', '』')  # Chinese double quotes → 『』
+        response_text = response_text.replace(''', '〔').replace(''', '〕')  # Chinese single quotes → 〔〕
+        response_text = response_text.replace('「', '【').replace('」', '】')  # Japanese quotes → 【】
 
-        result = json.loads(response_text)
+        # Try to parse as JSON first
+        try:
+            result = json.loads(response_text)
+        except json.JSONDecodeError:
+            # If JSON parsing fails, Claude might have returned Python dict with single quotes
+            # Try to parse as Python literal and convert to JSON
+            try:
+                python_dict = ast.literal_eval(response_text)
+                result = json.loads(json.dumps(python_dict))
+            except:
+                # If both fail, raise the original JSON error
+                raise
 
         # Validate response structure
         required_fields = ["video_type", "tldr", "tldr_zh", "segments"]
