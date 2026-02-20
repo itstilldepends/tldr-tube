@@ -11,6 +11,10 @@ from dotenv import load_dotenv
 
 from db.session import init_db, get_session
 from db.models import Video, Segment, Collection
+from db.operations import (
+    create_collection, add_video_to_collection, remove_video_from_collection,
+    move_video_in_collection, delete_collection, get_all_collections
+)
 from pipeline.processor import process_youtube_video, get_all_videos, delete_video
 from pipeline.utils import validate_youtube_url, extract_video_id, format_timestamp
 from pipeline.config import WHISPER_MODELS, CLAUDE_MODELS
@@ -302,12 +306,38 @@ def view_history():
     """Render the History view with all videos and collections."""
     st.title("📜 History")
 
-    # Get all videos
-    videos = get_all_videos()
+    # Handle delete collection confirmation (at top for visibility)
+    if st.session_state.get("confirm_delete_collection_id"):
+        collection_id = st.session_state.confirm_delete_collection_id
 
-    # Get all collections
-    with get_session() as session:
-        collections = session.query(Collection).order_by(Collection.created_at.desc()).all()
+        st.error("⚠️ **DELETE COLLECTION CONFIRMATION**")
+        st.warning("Are you sure you want to delete this collection AND all its videos? This cannot be undone.")
+
+        col1, col2, col3 = st.columns([1, 1, 3])
+
+        with col1:
+            if st.button("❌ Cancel", key="cancel_delete_collection", use_container_width=True):
+                del st.session_state.confirm_delete_collection_id
+                st.rerun()
+
+        with col2:
+            if st.button("🗑️ Delete Collection", type="primary", key="confirm_delete_collection", use_container_width=True):
+                try:
+                    if delete_collection(collection_id):
+                        st.success("✅ Collection deleted successfully")
+                        del st.session_state.confirm_delete_collection_id
+                        st.rerun()
+                    else:
+                        st.error("❌ Failed to delete collection - not found")
+                except Exception as e:
+                    st.error(f"❌ Error deleting collection: {str(e)}")
+                    st.exception(e)
+
+        st.markdown("---")
+
+    # Get all videos and collections
+    videos = get_all_videos()
+    collections = get_all_collections()
 
     if not videos and not collections:
         st.info("No videos processed yet. Process your first video from the sidebar!")
@@ -317,27 +347,53 @@ def view_history():
     if collections:
         st.markdown("### 📚 Collections")
         for collection in collections:
-            with st.expander(f"📚 {collection.title} ({len(collection.videos)} videos)"):
+            with st.expander(f"📚 {collection.title} ({len(collection.videos)} videos)", expanded=False):
                 if collection.description:
-                    st.caption(collection.description)
+                    st.info(collection.description)
 
-                for video in sorted(collection.videos, key=lambda v: v.order_index or 0):
-                    st.markdown(f"**{video.title}**")
-                    st.caption(video.tldr[:200] + "..." if len(video.tldr) > 200 else video.tldr)
+                if collection.videos:
+                    # Display videos in order
+                    sorted_videos = sorted(collection.videos, key=lambda v: v.order_index or 0)
+                    for idx, video in enumerate(sorted_videos):
+                        st.markdown(f"**{idx + 1}. {video.title}**")
+                        st.caption(video.tldr[:150] + "..." if len(video.tldr) > 150 else video.tldr)
 
-                    col1, col2 = st.columns([3, 1])
-                    with col1:
-                        if st.button(f"View Full Summary", key=f"view_{video.id}"):
-                            st.session_state.selected_video_id = video.id
-                    with col2:
-                        if st.button(f"🗑️ Delete", key=f"del_{video.id}"):
-                            st.session_state.confirm_delete_video_id = video.id
+                        col1, col2, col3, col4, col5 = st.columns([2, 1, 1, 1, 1])
+                        with col1:
+                            if st.button("📄 View", key=f"view_col_{video.id}"):
+                                st.session_state.selected_video_id = video.id
+                                st.rerun()
+                        with col2:
+                            # Move up button (disabled if first)
+                            if st.button("⬆️ Up", key=f"up_{video.id}", disabled=(idx == 0)):
+                                if move_video_in_collection(video.id, "up"):
+                                    st.rerun()
+                        with col3:
+                            # Move down button (disabled if last)
+                            if st.button("⬇️ Down", key=f"down_{video.id}", disabled=(idx == len(sorted_videos) - 1)):
+                                if move_video_in_collection(video.id, "down"):
+                                    st.rerun()
+                        with col4:
+                            if st.button("➖ Remove", key=f"remove_{video.id}"):
+                                if remove_video_from_collection(video.id):
+                                    st.success(f"✅ Removed from collection")
+                                    st.rerun()
+                        with col5:
+                            if st.button("🗑️", key=f"del_col_{video.id}"):
+                                st.session_state.confirm_delete_video_id = video.id
+                                st.rerun()
 
-                    st.markdown("---")
+                        st.markdown("")  # Spacing
+                else:
+                    st.info("No videos in this collection. Add videos from Standalone Videos below.")
 
+                st.markdown("---")
                 # Delete collection button
-                if st.button(f"🗑️ Delete Collection", key=f"del_collection_{collection.id}"):
-                    st.session_state.confirm_delete_collection_id = collection.id
+                col1, col2, col3 = st.columns([1, 1, 3])
+                with col1:
+                    if st.button(f"🗑️ Delete Collection", key=f"del_collection_{collection.id}"):
+                        st.session_state.confirm_delete_collection_id = collection.id
+                        st.rerun()
 
         st.markdown("---")
 
@@ -346,17 +402,38 @@ def view_history():
         st.markdown("### 🎬 Standalone Videos")
 
         for video in videos:
-            with st.expander(f"🎬 {video.title}"):
+            with st.expander(f"🎬 {video.title}", expanded=False):
                 st.caption(f"📺 {video.channel_name}")
-                st.markdown(video.tldr)
+                st.markdown(video.tldr[:200] + "..." if len(video.tldr) > 200 else video.tldr)
 
-                col1, col2 = st.columns([3, 1])
+                st.markdown("")  # Spacing
+
+                # Action buttons
+                col1, col2, col3 = st.columns([2, 2, 1])
                 with col1:
-                    if st.button(f"View Full Summary", key=f"view_standalone_{video.id}"):
+                    if st.button(f"📄 View Full Summary", key=f"view_standalone_{video.id}", use_container_width=True):
                         st.session_state.selected_video_id = video.id
+                        st.rerun()
                 with col2:
-                    if st.button(f"🗑️ Delete", key=f"del_standalone_{video.id}"):
+                    # Add to collection dropdown with button
+                    if collections:
+                        collection_options = {col.title: col.id for col in collections}
+                        selected_collection = st.selectbox(
+                            "➕ Add to Collection:",
+                            options=["Choose a collection..."] + list(collection_options.keys()),
+                            key=f"addto_{video.id}",
+                            help="Select a collection to add this video to"
+                        )
+                        if selected_collection != "Choose a collection...":
+                            if add_video_to_collection(video.id, collection_options[selected_collection]):
+                                st.success(f"✅ Added to '{selected_collection}'")
+                                st.rerun()
+                    else:
+                        st.info("💡 Create a collection first")
+                with col3:
+                    if st.button(f"🗑️ Delete", key=f"del_standalone_{video.id}", use_container_width=True):
                         st.session_state.confirm_delete_video_id = video.id
+                        st.rerun()
 
     # Handle view selected video
     if st.session_state.get("selected_video_id"):
@@ -397,18 +474,53 @@ def view_history():
 def view_new_collection():
     """Render the New Collection view."""
     st.title("📚 Create New Collection")
-    st.caption("Process multiple videos and group them as a collection (e.g., a course)")
+    st.caption("Create an empty collection, then add existing videos from History")
 
-    # TODO: Implement collection creation
-    st.info("🚧 Collection creation coming soon!")
+    # Create collection form
+    with st.form("create_collection_form"):
+        title = st.text_input(
+            "Collection Title *",
+            placeholder="e.g., Python Programming Course",
+            help="Required: Give your collection a descriptive name"
+        )
 
-    st.markdown("""
-    **Planned features:**
-    - Enter collection title and description
-    - Paste multiple YouTube URLs (one per line)
-    - Process all videos sequentially
-    - View collection summary with all videos in order
-    """)
+        description = st.text_area(
+            "Description (Optional)",
+            placeholder="e.g., A comprehensive course covering Python fundamentals...",
+            help="Optional: Add more details about this collection"
+        )
+
+        submitted = st.form_submit_button("Create Collection", type="primary")
+
+        if submitted:
+            if not title or not title.strip():
+                st.error("❌ Title is required")
+            else:
+                try:
+                    collection = create_collection(title.strip(), description.strip() if description else None)
+                    st.success(f"✅ Collection '{collection.title}' created successfully!")
+                    st.info("💡 Go to History to add videos to this collection")
+                except Exception as e:
+                    st.error(f"❌ Error creating collection: {str(e)}")
+
+    st.markdown("---")
+
+    # Show existing collections
+    collections = get_all_collections()
+    if collections:
+        st.markdown("### 📚 Existing Collections")
+        for col in collections:
+            with st.expander(f"📚 {col.title} ({len(col.videos)} videos)"):
+                if col.description:
+                    st.markdown(f"**Description:** {col.description}")
+                st.caption(f"Created: {col.created_at.strftime('%Y-%m-%d %H:%M')}")
+
+                if col.videos:
+                    st.markdown("**Videos:**")
+                    for video in sorted(col.videos, key=lambda v: v.order_index or 0):
+                        st.markdown(f"{video.order_index + 1}. {video.title}")
+                else:
+                    st.info("No videos in this collection yet")
 
 
 def main():
