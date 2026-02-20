@@ -13,6 +13,7 @@ from db.session import init_db, get_session
 from db.models import Video, Segment, Collection
 from pipeline.processor import process_youtube_video, get_all_videos, delete_video
 from pipeline.utils import validate_youtube_url, extract_video_id, format_timestamp
+from pipeline.config import WHISPER_MODELS, CLAUDE_MODELS
 
 # Load environment variables
 load_dotenv()
@@ -189,6 +190,64 @@ def view_new_video():
         help="Enter a YouTube video URL to generate summary"
     )
 
+    # Configuration options
+    st.markdown("---")
+    st.markdown("### ⚙️ Processing Options")
+
+    col1, col2, col3 = st.columns(3)
+
+    with col1:
+        transcript_source = st.radio(
+            "Transcript Source",
+            ["Auto (Prefer YouTube)", "Force Whisper ASR"],
+            help="Auto: Try YouTube captions first, fallback to ASR. Force: Always use Whisper ASR."
+        )
+        force_asr = (transcript_source == "Force Whisper ASR")
+
+    with col2:
+        # Build whisper model options with details
+        whisper_options = []
+        whisper_display = {}
+        for key, info in WHISPER_MODELS.items():
+            display_name = f"{key.capitalize()} - {info['size']}"
+            whisper_options.append(display_name)
+            whisper_display[display_name] = key
+
+        whisper_choice = st.selectbox(
+            "Whisper Model",
+            whisper_options,
+            index=3,  # Default to "medium" (4th item)
+            help="Model size affects speed vs accuracy. Only used if ASR is needed."
+        )
+        whisper_model = whisper_display[whisper_choice]
+
+        # Show model details
+        model_info = WHISPER_MODELS[whisper_model]
+        st.caption(f"{model_info['speed']} | {model_info['accuracy']}")
+
+    with col3:
+        # Build claude model options with details
+        claude_options = []
+        claude_display = {}
+        for key, info in CLAUDE_MODELS.items():
+            display_name = f"{key.capitalize()} - {info['name']}"
+            claude_options.append(display_name)
+            claude_display[display_name] = key
+
+        claude_choice = st.selectbox(
+            "Claude Model",
+            claude_options,
+            index=1,  # Default to "sonnet" (2nd item)
+            help="Model affects quality and cost. Sonnet recommended for most use cases."
+        )
+        claude_model = claude_display[claude_choice]
+
+        # Show model details
+        model_info = CLAUDE_MODELS[claude_model]
+        st.caption(f"{model_info['quality']} | {model_info['cost']}")
+
+    st.markdown("---")
+
     if st.button("Process Video", type="primary", disabled=not url):
         if not validate_youtube_url(url):
             st.error("❌ Invalid YouTube URL. Please check and try again.")
@@ -222,8 +281,14 @@ def view_new_video():
                         with status_container:
                             st.write(f"❌ {step}")
 
-                # Process video with status callback
-                video = process_youtube_video(url, status_callback=update_status)
+                # Process video with status callback and user configuration
+                video = process_youtube_video(
+                    url,
+                    status_callback=update_status,
+                    force_asr=force_asr,
+                    whisper_model=whisper_model,
+                    claude_model=claude_model
+                )
 
                 status_container.update(label="✅ Video processed successfully!", state="complete", expanded=False)
                 render_video_result(video)

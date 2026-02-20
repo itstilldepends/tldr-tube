@@ -15,6 +15,7 @@ from dotenv import load_dotenv
 
 from pipeline.prompts import PUNCTUATION_RESTORE_PROMPT, SUMMARIZATION_PROMPT
 from pipeline.transcript import format_transcript_for_llm
+from pipeline.config import CLAUDE_MODELS, DEFAULT_CLAUDE_MODEL
 
 # Load environment variables
 load_dotenv()
@@ -23,7 +24,7 @@ load_dotenv()
 client = Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY"))
 
 
-def restore_punctuation(transcript: List[Dict]) -> List[Dict]:
+def restore_punctuation(transcript: List[Dict], model: str = None) -> List[Dict]:
     """
     Restore punctuation in auto-generated YouTube transcripts using Claude.
 
@@ -32,16 +33,28 @@ def restore_punctuation(transcript: List[Dict]) -> List[Dict]:
 
     Args:
         transcript: List of transcript entries without punctuation
+        model: Claude model to use ("haiku", "sonnet", "opus").
+               Defaults to DEFAULT_CLAUDE_MODEL from config.
 
     Returns:
         List of transcript entries with restored punctuation
 
     Example:
         >>> transcript = [{"start": 0, "duration": 5, "text": "hello world how are you"}]
-        >>> fixed = restore_punctuation(transcript)
+        >>> fixed = restore_punctuation(transcript, model="sonnet")
         >>> print(fixed[0]["text"])
         "Hello world. How are you?"
     """
+    # Use default model if not specified
+    if model is None:
+        model = DEFAULT_CLAUDE_MODEL
+
+    # Validate model choice
+    if model not in CLAUDE_MODELS:
+        raise ValueError(f"Invalid Claude model: {model}. Valid options: {list(CLAUDE_MODELS.keys())}")
+
+    model_id = CLAUDE_MODELS[model]["id"]
+
     # Format transcript as plain text
     text_only = " ".join([entry["text"] for entry in transcript])
 
@@ -49,7 +62,7 @@ def restore_punctuation(transcript: List[Dict]) -> List[Dict]:
     prompt = PUNCTUATION_RESTORE_PROMPT.format(transcript=text_only)
 
     response = client.messages.create(
-        model="claude-sonnet-4-5-20250929",
+        model=model_id,
         max_tokens=len(text_only) + 1000,  # Allow some buffer for punctuation
         messages=[{"role": "user", "content": prompt}]
     )
@@ -79,7 +92,8 @@ def restore_punctuation(transcript: List[Dict]) -> List[Dict]:
 
 def summarize_transcript(
     transcript: List[Dict],
-    video_id: str
+    video_id: str,
+    model: str = None
 ) -> Tuple[str, str, str, List[Dict]]:
     """
     Generate TL;DR and segmented summaries for a video transcript.
@@ -91,6 +105,8 @@ def summarize_transcript(
     Args:
         transcript: List of transcript entries with timestamps
         video_id: YouTube video ID (for error reporting)
+        model: Claude model to use ("haiku", "sonnet", "opus").
+               Defaults to DEFAULT_CLAUDE_MODEL from config.
 
     Returns:
         Tuple of:
@@ -108,7 +124,7 @@ def summarize_transcript(
 
     Example:
         >>> transcript = [...]  # from fetch_youtube_transcript()
-        >>> video_type, tldr, tldr_zh, segments = summarize_transcript(transcript, "abc123")
+        >>> video_type, tldr, tldr_zh, segments = summarize_transcript(transcript, "abc123", model="sonnet")
         >>> print(video_type)
         'tutorial'
         >>> print(tldr)
@@ -118,6 +134,16 @@ def summarize_transcript(
         >>> print(segments[0])
         {'start_seconds': 0.0, 'end_seconds': 285.5, 'summary': '...', 'summary_zh': '...'}
     """
+    # Use default model if not specified
+    if model is None:
+        model = DEFAULT_CLAUDE_MODEL
+
+    # Validate model choice
+    if model not in CLAUDE_MODELS:
+        raise ValueError(f"Invalid Claude model: {model}. Valid options: {list(CLAUDE_MODELS.keys())}")
+
+    model_id = CLAUDE_MODELS[model]["id"]
+
     # Format transcript for LLM
     formatted_transcript = format_transcript_for_llm(transcript)
 
@@ -127,7 +153,7 @@ def summarize_transcript(
     try:
         # Call Claude API
         response = client.messages.create(
-            model="claude-sonnet-4-5-20250929",
+            model=model_id,
             max_tokens=4096,  # Enough for TL;DR + segments
             messages=[{"role": "user", "content": prompt}]
         )

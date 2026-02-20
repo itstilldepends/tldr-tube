@@ -22,7 +22,10 @@ def process_youtube_video(
     url: str,
     collection_id: Optional[int] = None,
     order_index: Optional[int] = None,
-    status_callback: Optional[Callable[[str, str], None]] = None
+    status_callback: Optional[Callable[[str, str], None]] = None,
+    force_asr: bool = False,
+    whisper_model: str = "medium",
+    claude_model: str = "sonnet"
 ) -> Video:
     """
     Process a YouTube video through the complete pipeline.
@@ -30,7 +33,7 @@ def process_youtube_video(
     Steps:
     1. Extract video_id and check cache
     2. Fetch metadata (title, duration, channel, thumbnail)
-    3. Try YouTube transcript API → fallback to Whisper if needed
+    3. Try YouTube transcript API → fallback to Whisper if needed (or force Whisper if requested)
     4. Restore punctuation if auto-generated
     5. Summarize with Claude (TL;DR + segments)
     6. Persist to database
@@ -41,6 +44,9 @@ def process_youtube_video(
         collection_id: Optional - ID of collection this video belongs to
         order_index: Optional - Order within collection
         status_callback: Optional - Callback function(step: str, status: str) to report progress
+        force_asr: If True, skip YouTube transcript and always use Whisper ASR
+        whisper_model: Whisper model size to use ("tiny", "base", "small", "medium", "large")
+        claude_model: Claude model to use ("haiku", "sonnet", "opus")
 
     Returns:
         Video object with all fields populated
@@ -49,7 +55,7 @@ def process_youtube_video(
         Exception: If any step fails
 
     Example:
-        >>> video = process_youtube_video("https://www.youtube.com/watch?v=abc123")
+        >>> video = process_youtube_video("https://www.youtube.com/watch?v=abc123", claude_model="opus")
         >>> print(video.title)
         'Introduction to Algorithms'
         >>> print(video.tldr)
@@ -89,16 +95,9 @@ def process_youtube_video(
     transcript_source = None
     is_auto_generated = False
 
-    update_status("Fetching transcript from YouTube", "running")
-    try:
-        # Try YouTube transcript API first
-        transcript, is_auto_generated = fetch_youtube_transcript(video_id)
-        transcript_source = "youtube_api"
-        caption_type = "auto-generated" if is_auto_generated else "manual"
-        update_status(f"Transcript fetched from YouTube ({caption_type})", "success")
-    except Exception as e:
-        # Fallback to Whisper
-        update_status("YouTube transcript not available, using Whisper ASR", "running")
+    # Check if we should force ASR or try YouTube transcript first
+    if force_asr:
+        update_status(f"Using Whisper ASR ({whisper_model} model) as requested", "running")
 
         # Create temp directory for audio
         audio_dir = "./data/audio"
@@ -108,9 +107,9 @@ def process_youtube_video(
         audio_path = download_audio(url, audio_dir)
         update_status("Audio downloaded successfully", "success")
 
-        update_status("Transcribing with mlx-whisper (medium model)", "running")
-        transcript = transcribe_audio(audio_path)
-        transcript_source = "whisper"
+        update_status(f"Transcribing with mlx-whisper ({whisper_model} model)", "running")
+        transcript = transcribe_audio(audio_path, model=whisper_model)
+        transcript_source = f"whisper_{whisper_model}"
         is_auto_generated = False  # Whisper output has punctuation
         update_status("Transcription complete", "success")
 
@@ -119,16 +118,47 @@ def process_youtube_video(
             os.remove(audio_path)
         except:
             pass
+    else:
+        update_status("Fetching transcript from YouTube", "running")
+        try:
+            # Try YouTube transcript API first
+            transcript, is_auto_generated = fetch_youtube_transcript(video_id)
+            transcript_source = "youtube_api"
+            caption_type = "auto-generated" if is_auto_generated else "manual"
+            update_status(f"Transcript fetched from YouTube ({caption_type})", "success")
+        except Exception as e:
+            # Fallback to Whisper
+            update_status("YouTube transcript not available, using Whisper ASR", "running")
+
+            # Create temp directory for audio
+            audio_dir = "./data/audio"
+            os.makedirs(audio_dir, exist_ok=True)
+
+            update_status("Downloading audio for transcription", "running")
+            audio_path = download_audio(url, audio_dir)
+            update_status("Audio downloaded successfully", "success")
+
+            update_status(f"Transcribing with mlx-whisper ({whisper_model} model)", "running")
+            transcript = transcribe_audio(audio_path, model=whisper_model)
+            transcript_source = f"whisper_{whisper_model}"
+            is_auto_generated = False  # Whisper output has punctuation
+            update_status("Transcription complete", "success")
+
+            # Clean up audio file
+            try:
+                os.remove(audio_path)
+            except:
+                pass
 
     # Step 4: Restore punctuation if auto-generated
     if is_auto_generated:
         update_status("Restoring punctuation (auto-generated transcript)", "running")
-        transcript = restore_punctuation(transcript)
+        transcript = restore_punctuation(transcript, model=claude_model)
         update_status("Punctuation restored", "success")
 
     # Step 5: Summarize with Claude
-    update_status("Generating bilingual summary with Claude AI", "running")
-    video_type, tldr, tldr_zh, segments = summarize_transcript(transcript, video_id)
+    update_status(f"Generating bilingual summary with Claude {claude_model.capitalize()}", "running")
+    video_type, tldr, tldr_zh, segments = summarize_transcript(transcript, video_id, model=claude_model)
     update_status(f"Summary generated (type: {video_type}, {len(segments)} segments, EN+ZH)", "success")
 
     # Step 6: Persist to database

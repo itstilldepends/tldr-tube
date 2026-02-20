@@ -35,14 +35,57 @@ Last updated: 2026-02-19
 - [x] Video result display with clickable timestamps
 - [x] Delete confirmation dialogs
 - [x] Cache checking (avoid reprocessing)
+- [x] Bilingual support (English + Chinese) in one API call
+- [x] Rich metadata display (description, upload_date, tags)
+- [x] Full transcript viewer with download button
+- [x] Collapsible sections for description and transcript
+
+### Configuration & Model Selection
+- [x] User-configurable transcript source (Auto vs Force ASR)
+- [x] Whisper model selection (tiny/base/small/medium/large)
+- [x] Claude model selection (Haiku 4.5, Sonnet 4.5, Opus 4.6)
+- [x] Model details display (speed, accuracy, cost estimates)
+- [x] Dynamic progress messages showing selected models
 
 ---
 
-## 🚧 待实现 (To Do)
+## 🚧 To Do
 
 ### High Priority
 
-#### 1. Collection Support (批量处理)
+#### 1. Background Task Queue
+**Status**: Not started (user requested to postpone)
+**Goal**: Allow tasks to run in background, enabling users to close the browser
+
+**Current Limitation**:
+- Users must keep browser tab open during processing (1-15 minutes)
+- Closing tab/refreshing page/network disconnect → task is interrupted
+- Tasks run in parallel without concurrency control
+
+**Proposed Solution**:
+- Implement lightweight task queue using Python `threading` + `queue`
+- Tasks continue running even if browser is closed
+- Show task status in History view: ⏳ Processing / ✅ Completed / ❌ Failed
+- Allow submitting multiple videos that process sequentially
+- Persist task state in SQLite database
+
+**Implementation Approach**:
+1. Create `pipeline/task_queue.py` with ThreadPoolExecutor
+2. Add task status to database (new table or column)
+3. Modify `process_youtube_video()` to run async
+4. Add task list view in History page
+5. Add polling/websocket for live status updates
+
+**Alternatives Considered**:
+- Celery + Redis (too complex for single-user local deployment)
+- Current sync model (acceptable for now, but risky)
+
+**Estimate**: ~3-4 hours
+**Priority**: Medium (user can accept current limitation for now)
+
+---
+
+#### 2. Collection Support
 **Status**: UI framework exists, backend not implemented
 **Files to modify**:
 - `app.py` - `view_new_collection()` function (currently shows "🚧 Coming soon")
@@ -60,7 +103,7 @@ Last updated: 2026-02-19
 
 ---
 
-#### 2. Export Summaries (导出功能)
+#### 3. Export Summaries
 **Status**: Not started
 **Goal**: Export video summaries as Markdown or PDF
 
@@ -80,7 +123,7 @@ Last updated: 2026-02-19
 
 ---
 
-#### 3. Keyframe Extraction (视频截图)
+#### 4. Keyframe Extraction
 **Status**: Not started (user requested to postpone)
 **Goal**: Extract key screenshots for tutorial videos
 
@@ -99,7 +142,7 @@ Last updated: 2026-02-19
 
 ### Medium Priority
 
-#### 4. Search Functionality (搜索)
+#### 5. Search Functionality
 **Status**: Not started
 **Goal**: Full-text search across all video summaries
 
@@ -113,7 +156,7 @@ Last updated: 2026-02-19
 
 ---
 
-#### 5. Edit Summaries (编辑总结)
+#### 6. Edit Summaries
 **Status**: Not started
 **Goal**: Allow manual editing of TL;DR and segment summaries
 
@@ -127,7 +170,7 @@ Last updated: 2026-02-19
 
 ---
 
-#### 6. Reprocess Video (重新总结)
+#### 7. Reprocess Video
 **Status**: Not started
 **Goal**: Re-summarize a video with different prompts
 
@@ -145,7 +188,7 @@ Last updated: 2026-02-19
 
 ### Low Priority
 
-#### 7. Local File Upload (本地视频)
+#### 8. Local File Upload
 **Status**: Stub exists in code comments
 **Goal**: Upload MP4/MOV files and process them
 
@@ -160,7 +203,7 @@ Last updated: 2026-02-19
 
 ---
 
-#### 8. S3 Video Support
+#### 9. S3 Video Support
 **Status**: Not started
 **Goal**: Process videos from S3 URLs
 
@@ -170,7 +213,7 @@ Last updated: 2026-02-19
 
 ---
 
-#### 9. Cross-Platform Whisper Support
+#### 10. Cross-Platform Whisper Support
 **Status**: mlx-whisper only works on Apple Silicon
 **Goal**: Fallback to `openai-whisper` for Intel Macs / Linux
 
@@ -184,7 +227,7 @@ Last updated: 2026-02-19
 
 ---
 
-#### 10. PostgreSQL Migration Guide
+#### 11. PostgreSQL Migration Guide
 **Status**: Currently using SQLite
 **Goal**: Document how to switch to Postgres for production
 
@@ -198,13 +241,13 @@ Last updated: 2026-02-19
 
 ---
 
-## 🐛 已知问题 (Known Issues)
+## 🐛 Known Issues
 
 None currently reported.
 
 ---
 
-## 💡 未来增强 (Future Enhancements)
+## 💡 Future Enhancements
 
 ### User Experience
 - [ ] Progress indicator for long videos (show estimated time)
@@ -236,7 +279,19 @@ None currently reported.
 
 ## 🔧 Technical Debt
 
-None currently.
+### Concurrency Limitations
+- No task queue: multiple users processing videos simultaneously may cause:
+  - High memory usage (multiple Whisper models loaded)
+  - API rate limits (multiple concurrent Claude API calls)
+  - System instability
+- **Mitigation**: Currently single-user deployment, acceptable risk
+- **Resolution**: Implement Background Task Queue (see TODO #1) when needed
+
+### Session Dependency
+- Tasks must complete while browser tab is open
+- Accidental tab closure or network issue loses progress
+- **Mitigation**: User is aware and can keep tab open
+- **Resolution**: Background Task Queue will eliminate this dependency
 
 ---
 

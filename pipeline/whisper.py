@@ -11,14 +11,18 @@ Cross-platform support (openai-whisper) is a future TODO.
 import mlx_whisper
 from typing import List, Dict
 
+from pipeline.config import WHISPER_MODELS, DEFAULT_WHISPER_MODEL
 
-def transcribe_audio(audio_path: str, language: str = None) -> List[Dict]:
+
+def transcribe_audio(audio_path: str, language: str = None, model: str = None) -> List[Dict]:
     """
     Transcribe audio file using mlx-whisper.
 
     Args:
         audio_path: Path to audio file (m4a, mp3, wav, etc.)
         language: Optional language code (e.g., "en", "zh"). If None, auto-detect.
+        model: Whisper model size to use ("tiny", "base", "small", "medium", "large").
+               Defaults to DEFAULT_WHISPER_MODEL from config.
 
     Returns:
         List of transcript entries: [{"start": float, "duration": float, "text": str}, ...]
@@ -28,7 +32,7 @@ def transcribe_audio(audio_path: str, language: str = None) -> List[Dict]:
         Exception: If transcription fails
 
     Example:
-        >>> transcript = transcribe_audio("./data/audio/video_id.m4a")
+        >>> transcript = transcribe_audio("./data/audio/video_id.m4a", model="medium")
         >>> print(transcript[0])
         {"start": 0.0, "duration": 2.5, "text": "Hello world"}
 
@@ -36,17 +40,20 @@ def transcribe_audio(audio_path: str, language: str = None) -> List[Dict]:
         This function uses the mlx-whisper library, which is optimized for Apple Silicon.
         It will not work on Intel Macs or non-macOS systems.
     """
+    # Use default model if not specified
+    if model is None:
+        model = DEFAULT_WHISPER_MODEL
+
+    # Validate model choice
+    if model not in WHISPER_MODELS:
+        raise ValueError(f"Invalid Whisper model: {model}. Valid options: {list(WHISPER_MODELS.keys())}")
+
+    model_path = WHISPER_MODELS[model]["name"]
+
     try:
-        # Using MLX-optimized medium model for better accuracy on Apple Silicon
-        # Available models:
-        # - mlx-community/whisper-tiny-mlx (39MB)
-        # - mlx-community/whisper-base-mlx (140MB)
-        # - mlx-community/whisper-small-mlx (244MB)
-        # - mlx-community/whisper-medium-mlx (769MB) ← using this
-        # - mlx-community/whisper-large-v3-mlx (1.5GB)
         result = mlx_whisper.transcribe(
             audio_path,
-            path_or_hf_repo="mlx-community/whisper-medium-mlx",
+            path_or_hf_repo=model_path,
             language=language,
             word_timestamps=False,  # We use segment timestamps, not word-level
         )
