@@ -18,6 +18,7 @@ from db.operations import (
 from pipeline.processor import process_youtube_video, get_all_videos, delete_video
 from pipeline.utils import validate_youtube_url, extract_video_id, format_timestamp
 from pipeline.config import WHISPER_MODELS, CLAUDE_MODELS
+from pipeline.export import export_video_to_markdown, export_collection_to_markdown
 
 # Load environment variables
 load_dotenv()
@@ -131,14 +132,51 @@ def render_video_result(video: Video):
         except Exception as e:
             st.error(f"Failed to load transcript: {str(e)}")
 
+    # Get segments (needed for export)
+    with get_session() as session:
+        segments = session.query(Segment).filter_by(video_id=video.id).order_by(Segment.start_seconds).all()
+
+    # Export section
+    st.markdown("---")
+    st.markdown("### 💾 Export Summary")
+
+    col1, col2, col3 = st.columns(3)
+
+    with col1:
+        # Export English Markdown
+        try:
+            markdown_en = export_video_to_markdown(video, segments, language="en")
+            st.download_button(
+                label="📥 Download English (MD)",
+                data=markdown_en,
+                file_name=f"{video.video_id}_summary_en.md",
+                mime="text/markdown",
+                help="Export summary with English content"
+            )
+        except Exception as e:
+            st.error(f"Export failed: {str(e)}")
+
+    with col2:
+        # Export Chinese Markdown
+        try:
+            markdown_zh = export_video_to_markdown(video, segments, language="zh")
+            st.download_button(
+                label="📥 Download Chinese (MD)",
+                data=markdown_zh,
+                file_name=f"{video.video_id}_summary_zh.md",
+                mime="text/markdown",
+                help="Export summary with Chinese content"
+            )
+        except Exception as e:
+            st.error(f"Export failed: {str(e)}")
+
+    with col3:
+        st.caption("💡 Markdown files can be opened in Notion, Obsidian, or any text editor")
+
     st.markdown("---")
 
     # Language tabs
     tab_en, tab_zh = st.tabs(["🇬🇧 English", "🇨🇳 中文"])
-
-    # Get segments
-    with get_session() as session:
-        segments = session.query(Segment).filter_by(video_id=video.id).order_by(Segment.start_seconds).all()
 
     # English tab
     with tab_en:

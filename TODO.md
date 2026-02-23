@@ -47,6 +47,15 @@ Last updated: 2026-02-19
 - [x] Model details display (speed, accuracy, cost estimates)
 - [x] Dynamic progress messages showing selected models
 
+### Export Functionality
+- [x] Export video summaries to Markdown format
+- [x] Export both English and Chinese versions separately
+- [x] Downloadable via Streamlit download button
+- [x] Includes metadata, TL;DR, and timestamped segments
+- [x] Clickable timestamp links in exported Markdown
+- [ ] PDF export (not implemented, placeholder exists)
+- [ ] Collection export (export.py has function, UI not added yet)
+
 ---
 
 ## 🚧 To Do
@@ -104,22 +113,27 @@ Last updated: 2026-02-19
 ---
 
 #### 3. Export Summaries
-**Status**: Not started
+**Status**: ✅ COMPLETED (Markdown export for single videos)
 **Goal**: Export video summaries as Markdown or PDF
 
-**Files to create**:
-- `pipeline/export.py` - Export logic
-- Add export button in video result view
+**Completed**:
+- ✅ Created `pipeline/export.py` with export logic
+- ✅ Added export buttons in video result view (`app.py`)
+- ✅ Markdown format includes:
+  - Title, metadata (channel, duration, tags, etc.)
+  - TL;DR (both English and Chinese)
+  - Segmented summaries with clickable timestamps
+- ✅ Separate export buttons for English and Chinese versions
+- ✅ File naming: `{video_id}_summary_{language}.md`
 
-**Features**:
-- Markdown format:
-  - Title, metadata
-  - TL;DR
-  - Segmented summaries with timestamps
-- PDF format (optional, using `reportlab` or `weasyprint`)
-- Export single video or entire collection
+**Not Yet Implemented**:
+- ❌ PDF export (placeholder exists in export.py, raises NotImplementedError)
+- ❌ Collection export UI (function exists in export.py, needs UI integration)
 
-**Estimate**: ~3-4 hours
+**Future Enhancements**:
+- Add PDF export using `weasyprint` or `reportlab`
+- Add collection export button in collection view
+- Add "Export All" option in History view
 
 ---
 
@@ -316,10 +330,11 @@ streamlit run app.py
 3. ✅ Delete videos with confirmation
 4. ✅ Clickable timestamps to jump to YouTube moments
 5. ✅ Auto-caching (same video won't be reprocessed)
+6. ✅ Export summaries to Markdown (English & Chinese)
 
 ### What Doesn't Work Yet
-1. ❌ Collection creation (UI exists, backend not implemented)
-2. ❌ Export summaries (not implemented)
+1. ❌ Collection creation (UI exists, backend not fully functional)
+2. ❌ PDF export (not implemented, Markdown export works)
 3. ❌ Keyframe extraction (postponed per user request)
 4. ❌ Search (not implemented)
 5. ❌ Local file upload (not implemented)

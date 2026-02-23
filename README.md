@@ -109,6 +109,25 @@ Click **📜 History** to see all processed videos. Click any video to view its 
 
 In the History view, click 🗑️ Delete next to any video. You'll be asked to confirm before deletion.
 
+### Export Summaries
+
+After processing a video, you can export the summary to Markdown format:
+
+1. View the processed video summary
+2. Find the **💾 Export Summary** section
+3. Choose your preferred language:
+   - Click **📥 Download English (MD)** for English export
+   - Click **📥 Download Chinese (MD)** for Chinese export
+4. The Markdown file will be downloaded automatically
+
+**Export includes**:
+- Video metadata (title, channel, duration, tags, etc.)
+- TL;DR summary
+- Time-stamped segments with clickable YouTube links
+- Perfect for importing into Notion, Obsidian, or any note-taking app
+
+📖 See [EXPORT_GUIDE.md](EXPORT_GUIDE.md) for detailed usage and advanced tips.
+
 ---
 
 ## How It Works
@@ -205,7 +224,7 @@ Output pricing: ~$0.015 per 1K tokens
 ### High Priority
 
 - [ ] **Collection support**: Batch process multiple videos
-- [ ] **Export summaries**: Download as Markdown or PDF
+- [x] **Export summaries**: Download as Markdown ✅ (PDF coming soon)
 - [ ] **Local file upload**: Process MP4/MOV files
 - [ ] **S3 support**: Process videos from S3 URLs
 
