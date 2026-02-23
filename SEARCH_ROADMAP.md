@@ -227,31 +227,58 @@ def semantic_search(query, top_k=10):
     return [(all_videos[i], similarities[i]) for i in top_indices]
 ```
 
-**混合搜索策略**（推荐）:
+**混合搜索策略**（推荐）⭐:
 
 ```python
 def hybrid_search(query):
+    """
+    Hybrid search: combines exact keyword matching with semantic similarity.
+    Users get best of both worlds without choosing modes.
+    """
     # 1. 关键词搜索（快速，精确）
     keyword_results = keyword_search(query)
 
     # 2. 语义搜索（智能，相关）
-    semantic_results = semantic_search(query)
+    semantic_results = semantic_search(query, top_k=20)
 
-    # 3. 合并结果
-    # - 关键词匹配优先（分数 1.0，🎯 图标）
-    # - 语义匹配补充（分数 0.0-1.0，💡 图标）
-    combined = merge_results(keyword_results, semantic_results)
+    # 3. 合并去重
+    combined = {}
 
-    return combined  # 精确匹配排在前面
+    # Exact matches: score 1.0, always ranked first
+    for video in keyword_results:
+        combined[video.id] = {
+            'video': video,
+            'score': 1.0,
+            'type': 'exact',
+            'icon': '🎯'
+        }
+
+    # Semantic matches: add related results
+    for video, similarity in semantic_results:
+        if video.id not in combined:  # De-duplicate
+            combined[video.id] = {
+                'video': video,
+                'score': similarity,
+                'type': 'semantic',
+                'icon': '💡'
+            }
+
+    # 4. 按分数排序（精确匹配总是在前）
+    return sorted(combined.values(), key=lambda x: x['score'], reverse=True)
 ```
 
-**用户体验**：
-- 一个搜索框，自动结合两种搜索
-- 精确匹配用 🎯 标识，排在最前
-- 相关结果用 💡 标识，显示相似度百分比
-- 用户无需选择搜索模式
+**用户体验**（类似 Google）：
+- **一个搜索框**，自动结合两种搜索
+- **精确匹配**用 🎯 标识，分数 1.0，排在最前
+- **相关结果**用 💡 标识，显示相似度百分比（如 "95% similar"）
+- **跨语言发现**：英文搜索能找到中文内容
+- **用户无需选择**搜索模式，自动给最佳结果
 
-📖 详见 `DATABASE_AND_SEARCH_FAQ.md` 问题 2
+**为什么不让用户选择？**
+- ✅ 简单：一个搜索框 vs 复杂的模式选项
+- ✅ 智能：自动给最好的结果
+- ✅ 不丢失精确匹配：🎯 总是排在前面
+- ✅ 业界标准：Google、Bing 都是这么做的
 
 ### 成本估算 / Cost Estimation
 
@@ -286,41 +313,212 @@ def hybrid_search(query):
 
 ### 实现步骤 / Implementation Steps
 
-1. **添加依赖** / **Add dependency**
-   ```bash
-   pip install sentence-transformers
-   ```
+#### Phase 1: 数据库准备（安全，不丢数据）
 
-2. **修改数据库 schema** / **Modify database schema**
-   - 添加 embedding 字段到 Video 和 Segment models
-   - 创建迁移脚本（或重建数据库）
+**关键原则**：只添加新列，不删除旧数据 ✅
 
-3. **实现 embedding 生成** / **Implement embedding generation**
-   - 创建 `pipeline/embeddings.py`
-   - 在 `process_youtube_video()` 中调用
+```python
+# 1. 修改 db/models.py - 添加新字段
+class Video(Base):
+    # ... existing fields ...
+    embedding = Column(LargeBinary, nullable=True)  # 新增！
 
-4. **实现语义搜索** / **Implement semantic search**
-   - 创建 `pipeline/search.py`
-   - 实现 `semantic_search()` 和 `hybrid_search()`
+class Segment(Base):
+    # ... existing fields ...
+    embedding = Column(LargeBinary, nullable=True)  # 新增！
+```
 
-5. **更新 UI** / **Update UI**
-   - 在 History 视图添加"语义搜索"选项
-   - 显示相似度分数
+**迁移策略**：
+- ✅ 新字段设为 `nullable=True` - 旧数据不受影响
+- ✅ SQLAlchemy 自动添加列 - 已有数据保持不变
+- ✅ 新处理的视频自动生成 embedding
+- ✅ 旧视频可以按需批量生成
 
-6. **优化性能** / **Optimize performance**
-   - 使用单例模式加载模型
-   - 批量生成 embeddings
-   - 缓存搜索结果
+#### Phase 2: 安装依赖
+
+```bash
+pip install sentence-transformers
+pip freeze > requirements.txt
+```
+
+#### Phase 3: Embedding 生成模块
+
+创建 `pipeline/embeddings.py`:
+
+```python
+from sentence_transformers import SentenceTransformer
+import numpy as np
+from functools import lru_cache
+
+@lru_cache(maxsize=1)
+def load_model():
+    """Load model once, cache in memory"""
+    return SentenceTransformer('paraphrase-multilingual-MiniLM-L12-v2')
+
+def generate_video_embedding(video):
+    """Generate embedding for video"""
+    model = load_model()
+    text = f"{video.title} {video.tldr} {video.tldr_zh}"
+    embedding = model.encode(text)
+    return embedding.tobytes()
+
+def generate_segment_embedding(segment):
+    """Generate embedding for segment"""
+    model = load_model()
+    text = f"{segment.summary} {segment.summary_zh}"
+    embedding = model.encode(text)
+    return embedding.tobytes()
+```
+
+#### Phase 4: 修改视频处理流程
+
+在 `pipeline/processor.py` 中集成：
+
+```python
+from pipeline.embeddings import generate_video_embedding, generate_segment_embedding
+
+def process_youtube_video(...):
+    # ... existing processing ...
+
+    # Generate embeddings (new videos only)
+    video.embedding = generate_video_embedding(video)
+
+    for segment in segments:
+        segment.embedding = generate_segment_embedding(segment)
+
+    # Save to database
+    session.add(video)
+    session.commit()
+```
+
+#### Phase 5: 实现混合搜索
+
+创建 `pipeline/search.py`:
+
+```python
+def keyword_search(query):
+    """Existing keyword search (unchanged)"""
+    # ... current implementation ...
+
+def semantic_search(query, top_k=20):
+    """Semantic search using embeddings"""
+    from pipeline.embeddings import load_model
+    import numpy as np
+    from sklearn.metrics.pairwise import cosine_similarity
+
+    model = load_model()
+    query_embedding = model.encode(query)
+
+    results = []
+    with get_session() as session:
+        videos = session.query(Video).filter(Video.embedding.isnot(None)).all()
+
+        for video in videos:
+            video_emb = np.frombuffer(video.embedding, dtype=np.float32)
+            similarity = cosine_similarity([query_embedding], [video_emb])[0][0]
+            results.append((video, float(similarity)))
+
+    # Return top K
+    return sorted(results, key=lambda x: x[1], reverse=True)[:top_k]
+
+def hybrid_search(query):
+    """Combine keyword + semantic search"""
+    # Implementation shown above
+    ...
+```
+
+#### Phase 6: 更新 UI
+
+修改 `app.py` 的 `view_history()`:
+
+```python
+def view_history():
+    # ... existing code ...
+
+    if search_query:
+        # Use hybrid search if embeddings available
+        has_embeddings = session.query(Video).filter(
+            Video.embedding.isnot(None)
+        ).count() > 0
+
+        if has_embeddings:
+            results = hybrid_search(search_query)
+        else:
+            # Fallback to keyword search
+            results = keyword_search(search_query)
+
+        # Display results with icons
+        for result in results:
+            icon = result.get('icon', '🎬')
+            st.expander(f"{icon} {result['video'].title}")
+
+            if result.get('type') == 'exact':
+                st.caption("🎯 Exact match")
+            elif result.get('type') == 'semantic':
+                similarity = int(result['score'] * 100)
+                st.caption(f"💡 Related result - {similarity}% similar")
+```
+
+#### Phase 7: 批量生成旧视频的 Embeddings（可选）
+
+创建 `scripts/generate_embeddings.py`:
+
+```python
+from db.session import get_session
+from db.models import Video, Segment
+from pipeline.embeddings import generate_video_embedding, generate_segment_embedding
+
+def backfill_embeddings():
+    """Generate embeddings for existing videos"""
+    with get_session() as session:
+        videos = session.query(Video).filter(Video.embedding.is_(None)).all()
+
+        print(f"Processing {len(videos)} videos...")
+
+        for i, video in enumerate(videos):
+            print(f"[{i+1}/{len(videos)}] {video.title}")
+
+            # Generate video embedding
+            video.embedding = generate_video_embedding(video)
+
+            # Generate segment embeddings
+            for segment in video.segments:
+                segment.embedding = generate_segment_embedding(segment)
+
+            session.commit()
+
+        print("✅ Done!")
+
+if __name__ == "__main__":
+    backfill_embeddings()
+```
+
+运行：
+```bash
+python scripts/generate_embeddings.py
+```
 
 ### 工作量估算 / Effort Estimation
 
-- **研究和选型**: 1 小时
-- **数据库改动**: 1.5 小时
-- **Embedding 生成**: 2 小时
-- **搜索实现**: 2 小时
-- **UI 集成**: 1.5 小时
-- **测试和优化**: 2 小时
-- **总计**: **10 小时**
+| 阶段 | 时间 | 风险 |
+|-----|------|-----|
+| 修改数据库 schema | 0.5h | ✅ 低（只添加列） |
+| 安装依赖 + 测试 | 0.5h | ✅ 低 |
+| Embedding 生成模块 | 1.5h | ✅ 低 |
+| 修改处理流程 | 1h | ⚠️ 中（测试新视频） |
+| 实现混合搜索 | 2h | ⚠️ 中 |
+| 更新 UI | 1.5h | ✅ 低 |
+| 批量生成旧数据 | 1h | ✅ 低（可选） |
+| 测试和优化 | 2h | ⚠️ 中 |
+| **总计** | **10h** | **整体低风险** |
+
+### 数据安全保障
+
+- ✅ **不删除旧列** - 只添加新的 `embedding` 列
+- ✅ **新列可为空** - `nullable=True`，旧数据不受影响
+- ✅ **渐进式迁移** - 新视频自动生成，旧视频按需生成
+- ✅ **可回退** - 如果不满意，删除 embedding 列即可
+- ✅ **SQLite 备份** - 改动前先 `cp data/tldr_tube.db data/tldr_tube.db.backup`
 
 ---
 
