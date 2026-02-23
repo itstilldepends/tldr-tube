@@ -128,6 +128,28 @@ After processing a video, you can export the summary to Markdown format:
 
 📖 See [EXPORT_GUIDE.md](EXPORT_GUIDE.md) for detailed usage and advanced tips.
 
+### Search Videos
+
+Quickly find videos in your library:
+
+1. Go to **📜 History** view
+2. Use the **🔍 Search** box at the top
+3. Type keywords to search across:
+   - Video titles
+   - TL;DR summaries (English & Chinese)
+   - Segment summaries (English & Chinese)
+   - Video descriptions
+   - Tags and channel names
+4. Results update in real-time
+
+**Search tips**:
+- Case-insensitive (e.g., "Python" = "python")
+- Searches all content simultaneously
+- Works in both English and Chinese
+- Shows match count
+
+📖 See [SEARCH_ROADMAP.md](SEARCH_ROADMAP.md) for future semantic search plans.
+
 ---
 
 ## How It Works
@@ -230,7 +252,7 @@ Output pricing: ~$0.015 per 1K tokens
 
 ### Medium Priority
 
-- [ ] **Search**: Full-text search across summaries
+- [x] **Search**: Keyword search ✅ (Semantic search planned for > 50 videos)
 - [ ] **Edit summaries**: Manual editing of TL;DR/segments
 - [ ] **Reprocess videos**: Re-summarize with different prompts
 

@@ -56,6 +56,16 @@ Last updated: 2026-02-19
 - [ ] PDF export (not implemented, placeholder exists)
 - [ ] Collection export (export.py has function, UI not added yet)
 
+### Search Functionality (Stage 1: Keyword Search)
+- [x] Basic keyword search in History view
+- [x] Search across multiple fields (title, TL;DR, segments, description, tags, channel)
+- [x] Case-insensitive substring matching
+- [x] Support for Chinese and English
+- [x] Display match count
+- [x] Real-time filtering
+- [ ] Stage 2: Semantic search (planned, see SEARCH_ROADMAP.md)
+- [ ] Stage 3: Advanced filters (future, see SEARCH_ROADMAP.md)
+
 ---
 
 ## 🚧 To Do
@@ -157,16 +167,33 @@ Last updated: 2026-02-19
 ### Medium Priority
 
 #### 5. Search Functionality
-**Status**: Not started
+**Status**: ✅ Stage 1 COMPLETED (Keyword Search)
 **Goal**: Full-text search across all video summaries
 
-**Implementation**:
-- Add search bar in History view
-- Search in: title, tldr, segment summaries
-- Use SQLite FTS5 (Full-Text Search) or simple LIKE query
-- Display results with highlights
+**Stage 1: Keyword Search (COMPLETED)**:
+- ✅ Add search bar in History view
+- ✅ Search in: title, tldr (EN/ZH), segment summaries (EN/ZH), description, tags, channel
+- ✅ Use simple LIKE query with case-insensitive matching
+- ✅ Display match count and filtered results
+- ✅ Real-time filtering as user types
 
-**Estimate**: ~2-3 hours
+**Stage 2: Semantic Search (PLANNED)**:
+- [ ] Use sentence-transformers for local semantic search
+- [ ] Support synonym matching (e.g., "decorator" finds "wrapper")
+- [ ] Cross-language search (English query finds Chinese content)
+- [ ] Relevance ranking by similarity score
+- [ ] Hybrid search (keyword + semantic)
+- **When**: Video count > 50, or user feedback about search limitations
+- **Effort**: ~10 hours
+- **See**: `SEARCH_ROADMAP.md` for detailed plan
+
+**Stage 3: Advanced Search (FUTURE)**:
+- [ ] Advanced filters (video type, date range, duration, channel)
+- [ ] Search history and suggestions
+- [ ] Regex support
+- [ ] Search result highlighting
+- [ ] Saved searches
+- **Effort**: ~8-12 hours
 
 ---
 
@@ -331,12 +358,13 @@ streamlit run app.py
 4. ✅ Clickable timestamps to jump to YouTube moments
 5. ✅ Auto-caching (same video won't be reprocessed)
 6. ✅ Export summaries to Markdown (English & Chinese)
+7. ✅ Search videos by keywords (title, content, tags)
 
 ### What Doesn't Work Yet
 1. ❌ Collection creation (UI exists, backend not fully functional)
 2. ❌ PDF export (not implemented, Markdown export works)
 3. ❌ Keyframe extraction (postponed per user request)
-4. ❌ Search (not implemented)
+4. ❌ Semantic search (keyword search works, semantic search planned)
 5. ❌ Local file upload (not implemented)
 
 ### Next Steps (when user returns)

@@ -374,12 +374,68 @@ def view_history():
         st.markdown("---")
 
     # Get all videos and collections
-    videos = get_all_videos()
+    all_videos = get_all_videos()
     collections = get_all_collections()
 
-    if not videos and not collections:
+    if not all_videos and not collections:
         st.info("No videos processed yet. Process your first video from the sidebar!")
         return
+
+    # Search functionality
+    st.markdown("### 🔍 Search")
+    search_query = st.text_input(
+        "Search videos by title, content, or tags",
+        placeholder="e.g., Python decorators, async programming, 装饰器...",
+        help="Search in video titles, TL;DR summaries, segments, descriptions, and tags",
+        key="search_query"
+    )
+
+    # Filter videos based on search query
+    if search_query and search_query.strip():
+        query = search_query.strip().lower()
+        filtered_videos = []
+
+        with get_session() as session:
+            for video in all_videos:
+                # Search in multiple fields
+                search_fields = [
+                    video.title.lower() if video.title else "",
+                    video.tldr.lower() if video.tldr else "",
+                    video.tldr_zh.lower() if video.tldr_zh else "",
+                    video.description.lower() if video.description else "",
+                    video.channel_name.lower() if video.channel_name else "",
+                ]
+
+                # Add tags
+                if video.tags:
+                    try:
+                        tags_list = json.loads(video.tags)
+                        search_fields.extend([tag.lower() for tag in tags_list])
+                    except:
+                        pass
+
+                # Add segment summaries
+                segments = session.query(Segment).filter_by(video_id=video.id).all()
+                for segment in segments:
+                    search_fields.append(segment.summary.lower() if segment.summary else "")
+                    search_fields.append(segment.summary_zh.lower() if segment.summary_zh else "")
+
+                # Check if query matches any field
+                if any(query in field for field in search_fields):
+                    filtered_videos.append(video)
+
+        videos = filtered_videos
+
+        if videos:
+            st.success(f"✅ Found {len(videos)} video(s) matching '{search_query}'")
+        else:
+            st.warning(f"⚠️ No videos found matching '{search_query}'")
+            st.info("💡 Try different keywords or check spelling")
+            return
+    else:
+        videos = all_videos
+
+    st.markdown("---")
 
     # Display collections
     if collections:
