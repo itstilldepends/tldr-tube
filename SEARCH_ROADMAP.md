@@ -143,6 +143,17 @@ for video in all_videos:
 Results sorted by similarity score, most relevant first
 ```
 
+### 数据库兼容性 / Database Compatibility
+
+**好消息**：语义搜索代码在 SQLite 和 PostgreSQL 之间 **零改动** ✅
+
+使用 SQLAlchemy + numpy bytes 存储方案：
+- `embedding = Column(LargeBinary)`
+- SQLite 和 PostgreSQL 都支持
+- 迁移数据库时搜索代码不需要改
+
+📖 详见 `DATABASE_AND_SEARCH_FAQ.md` 问题 1
+
 ### 技术方案 / Technical Approach
 
 **使用 sentence-transformers 本地模型**:
@@ -216,7 +227,7 @@ def semantic_search(query, top_k=10):
     return [(all_videos[i], similarities[i]) for i in top_indices]
 ```
 
-**混合搜索策略**:
+**混合搜索策略**（推荐）:
 
 ```python
 def hybrid_search(query):
@@ -227,12 +238,20 @@ def hybrid_search(query):
     semantic_results = semantic_search(query)
 
     # 3. 合并结果
-    # - 关键词匹配加分 +0.3
-    # - 语义相似度作为基础分数
+    # - 关键词匹配优先（分数 1.0，🎯 图标）
+    # - 语义匹配补充（分数 0.0-1.0，💡 图标）
     combined = merge_results(keyword_results, semantic_results)
 
-    return combined
+    return combined  # 精确匹配排在前面
 ```
+
+**用户体验**：
+- 一个搜索框，自动结合两种搜索
+- 精确匹配用 🎯 标识，排在最前
+- 相关结果用 💡 标识，显示相似度百分比
+- 用户无需选择搜索模式
+
+📖 详见 `DATABASE_AND_SEARCH_FAQ.md` 问题 2
 
 ### 成本估算 / Cost Estimation
 
@@ -408,6 +427,7 @@ def hybrid_search(query):
 
 ## 🔗 相关文档 / Related Documents
 
+- `DATABASE_AND_SEARCH_FAQ.md` ⭐ - 数据库迁移和搜索方案详细 FAQ
 - `TODO.md` - 项目待办事项 / Project TODO list
 - `CLAUDE.md` - 开发指南 / Development guide
 - `app.py` - 搜索功能实现 / Search implementation
