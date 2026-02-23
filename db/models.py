@@ -8,7 +8,7 @@ Models:
 """
 
 from datetime import datetime
-from sqlalchemy import Column, Integer, String, Text, DateTime, Float, ForeignKey
+from sqlalchemy import Column, Integer, String, Text, DateTime, Float, ForeignKey, LargeBinary
 from sqlalchemy.orm import declarative_base, relationship
 
 Base = declarative_base()
@@ -68,6 +68,9 @@ class Video(Base):
 
     # Timestamps
     processed_at = Column(DateTime, nullable=False, default=datetime.utcnow)
+
+    # Semantic search (added for BGE-M3 embeddings)
+    embedding = Column(LargeBinary, nullable=True)  # 768-dim dense vector from BGE-M3
 
     # Relationships
     collection = relationship("Collection", back_populates="videos")

@@ -19,6 +19,7 @@ from pipeline.processor import process_youtube_video, get_all_videos, delete_vid
 from pipeline.utils import validate_youtube_url, extract_video_id, format_timestamp
 from pipeline.config import WHISPER_MODELS, CLAUDE_MODELS
 from pipeline.export import export_video_to_markdown, export_collection_to_markdown
+from pipeline.search import hybrid_search
 
 # Load environment variables
 load_dotenv()
@@ -390,44 +391,33 @@ def view_history():
         key="search_query"
     )
 
-    # Filter videos based on search query
+    # Filter videos based on search query (hybrid: semantic + keyword)
     if search_query and search_query.strip():
-        query = search_query.strip().lower()
-        filtered_videos = []
+        query = search_query.strip()
 
-        with get_session() as session:
-            for video in all_videos:
-                # Search in multiple fields
-                search_fields = [
-                    video.title.lower() if video.title else "",
-                    video.tldr.lower() if video.tldr else "",
-                    video.tldr_zh.lower() if video.tldr_zh else "",
-                    video.description.lower() if video.description else "",
-                    video.channel_name.lower() if video.channel_name else "",
-                ]
+        # Use hybrid search (combines semantic similarity + keyword matching)
+        search_results = hybrid_search(
+            query,
+            top_k=20,
+            semantic_weight=0.7,
+            keyword_weight=0.3,
+            min_semantic_score=0.3
+        )
 
-                # Add tags
-                if video.tags:
-                    try:
-                        tags_list = json.loads(video.tags)
-                        search_fields.extend([tag.lower() for tag in tags_list])
-                    except:
-                        pass
+        if search_results:
+            # Extract videos and display match info
+            videos = [video for video, score, match_info in search_results]
 
-                # Add segment summaries
-                segments = session.query(Segment).filter_by(video_id=video.id).all()
-                for segment in segments:
-                    search_fields.append(segment.summary.lower() if segment.summary else "")
-                    search_fields.append(segment.summary_zh.lower() if segment.summary_zh else "")
-
-                # Check if query matches any field
-                if any(query in field for field in search_fields):
-                    filtered_videos.append(video)
-
-        videos = filtered_videos
-
-        if videos:
+            # Show search results summary
             st.success(f"✅ Found {len(videos)} video(s) matching '{search_query}'")
+
+            # Show match type breakdown
+            match_types = {}
+            for _, score, match_info in search_results:
+                match_types[match_info] = match_types.get(match_info, 0) + 1
+
+            match_summary = " | ".join([f"{k}: {v}" for k, v in match_types.items()])
+            st.caption(f"Search results: {match_summary}")
         else:
             st.warning(f"⚠️ No videos found matching '{search_query}'")
             st.info("💡 Try different keywords or check spelling")

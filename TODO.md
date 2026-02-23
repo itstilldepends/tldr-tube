@@ -56,14 +56,18 @@ Last updated: 2026-02-19
 - [ ] PDF export (not implemented, placeholder exists)
 - [ ] Collection export (export.py has function, UI not added yet)
 
-### Search Functionality (Stage 1: Keyword Search)
-- [x] Basic keyword search in History view
+### Search Functionality
+- [x] Stage 1: Basic keyword search in History view
 - [x] Search across multiple fields (title, TL;DR, segments, description, tags, channel)
 - [x] Case-insensitive substring matching
 - [x] Support for Chinese and English
 - [x] Display match count
 - [x] Real-time filtering
-- [ ] Stage 2: Semantic search (planned, see SEARCH_ROADMAP.md)
+- [x] Stage 2: Semantic search (✅ COMPLETED - BGE-M3 embeddings)
+  - Hybrid search (keyword + semantic) in single search box
+  - Video-level embeddings (768-dim BGE-M3)
+  - Automatic embedding generation for new videos
+  - Backfill script for existing videos
 - [ ] Stage 3: Advanced filters (future, see SEARCH_ROADMAP.md)
 
 ---
@@ -167,7 +171,7 @@ Last updated: 2026-02-19
 ### Medium Priority
 
 #### 5. Search Functionality
-**Status**: ✅ Stage 1 COMPLETED (Keyword Search)
+**Status**: ✅ COMPLETED (Keyword + Semantic Hybrid Search)
 **Goal**: Full-text search across all video summaries
 
 **Stage 1: Keyword Search (COMPLETED)**:
@@ -177,15 +181,18 @@ Last updated: 2026-02-19
 - ✅ Display match count and filtered results
 - ✅ Real-time filtering as user types
 
-**Stage 2: Semantic Search (PLANNED)**:
-- [ ] Use sentence-transformers for local semantic search
-- [ ] Support synonym matching (e.g., "decorator" finds "wrapper")
-- [ ] Cross-language search (English query finds Chinese content)
-- [ ] Relevance ranking by similarity score
-- [ ] Hybrid search (keyword + semantic)
-- **When**: Video count > 50, or user feedback about search limitations
-- **Effort**: ~10 hours
-- **See**: `SEARCH_ROADMAP.md` for detailed plan
+**Stage 2: Semantic Search (COMPLETED 2026-02-23)**:
+- ✅ BGE-M3 embeddings (768-dim, 8192 token limit)
+- ✅ Video-level embeddings (title + tldr + tldr_zh)
+- ✅ Automatic embedding generation for new videos
+- ✅ Hybrid search (keyword + semantic) in single search box
+- ✅ Cross-language search (English query finds Chinese content)
+- ✅ Relevance ranking by similarity score
+- ✅ Match type indicators (🎯 Keyword, 💡 Semantic, 🎯💡 Hybrid)
+- ✅ Backfill script for existing videos (`scripts/backfill_embeddings.py`)
+- **Model**: BAAI/bge-m3 via FlagEmbedding 1.3.5
+- **Files**: `pipeline/embeddings.py`, `pipeline/search.py`
+- **See**: `SEMANTIC_SEARCH_IMPLEMENTATION.md` for details
 
 **Stage 3: Advanced Search (FUTURE)**:
 - [ ] Advanced filters (video type, date range, duration, channel)
@@ -193,6 +200,7 @@ Last updated: 2026-02-19
 - [ ] Regex support
 - [ ] Search result highlighting
 - [ ] Saved searches
+- [ ] Segment-level search (currently video-level only)
 - **Effort**: ~8-12 hours
 
 ---
@@ -358,14 +366,15 @@ streamlit run app.py
 4. ✅ Clickable timestamps to jump to YouTube moments
 5. ✅ Auto-caching (same video won't be reprocessed)
 6. ✅ Export summaries to Markdown (English & Chinese)
-7. ✅ Search videos by keywords (title, content, tags)
+7. ✅ Hybrid search (keyword + semantic, BGE-M3 embeddings)
+8. ✅ Automatic embeddings for semantic search
 
 ### What Doesn't Work Yet
 1. ❌ Collection creation (UI exists, backend not fully functional)
 2. ❌ PDF export (not implemented, Markdown export works)
 3. ❌ Keyframe extraction (postponed per user request)
-4. ❌ Semantic search (keyword search works, semantic search planned)
-5. ❌ Local file upload (not implemented)
+4. ❌ Local file upload (not implemented)
+5. ❌ Segment-level embeddings (currently video-level only)
 
 ### Next Steps (when user returns)
 1. Read this TODO.md to understand project state

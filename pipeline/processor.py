@@ -16,6 +16,7 @@ from pipeline.metadata import fetch_video_metadata, download_audio
 from pipeline.transcript import fetch_youtube_transcript, format_transcript_for_llm
 from pipeline.whisper import transcribe_audio
 from pipeline.summarize import restore_punctuation, summarize_transcript
+from pipeline.embeddings import generate_video_embedding
 
 
 def process_youtube_video(
@@ -214,6 +215,26 @@ def process_youtube_video(
         session.refresh(video)  # Refresh to get relationships
 
     update_status(f"Saved to database (ID: {video.id})", "success")
+
+    # Step 7: Generate semantic search embedding
+    update_status("Generating semantic search embedding (BGE-M3)", "running")
+    try:
+        embedding_bytes = generate_video_embedding(video)
+
+        # Save embedding to database
+        with get_session() as session:
+            video_to_update = session.query(Video).filter_by(id=video.id).first()
+            video_to_update.embedding = embedding_bytes
+            session.commit()
+            session.refresh(video_to_update)
+            video = video_to_update  # Update our local reference
+
+        update_status("Semantic search embedding generated", "success")
+    except Exception as e:
+        # Don't fail the whole pipeline if embedding generation fails
+        update_status(f"Warning: Embedding generation failed ({str(e)})", "error")
+        print(f"  ⚠️ Continuing without embedding for this video")
+
     update_status("Processing complete!", "success")
 
     return video

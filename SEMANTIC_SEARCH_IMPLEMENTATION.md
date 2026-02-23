@@ -2,7 +2,53 @@
 
 **Last Updated**: 2026-02-23
 
-**Status**: Ready to implement when video count > 50
+**Status**: ✅ COMPLETED - Semantic search is now live!
+
+---
+
+## 🎉 Implementation Summary
+
+### What Was Built
+
+**Model**: BGE-M3 (BAAI/bge-m3)
+- 768-dim embeddings (vs 384 planned in this doc)
+- 8192 token limit (vs 512 in original plan)
+- Hybrid retrieval support (dense + sparse + multi-vector)
+
+**Features Implemented**:
+1. ✅ Video-level embeddings (title + tldr + tldr_zh)
+2. ✅ Automatic embedding generation for new videos
+3. ✅ Hybrid search (keyword + semantic)
+4. ✅ Database schema migration (zero data loss)
+5. ✅ Backfill script for existing videos
+
+**Files Created**:
+- `pipeline/embeddings.py` - BGE-M3 model loading and embedding generation
+- `pipeline/search.py` - Semantic, keyword, and hybrid search functions
+- `scripts/migrate_add_embeddings.py` - Safe schema migration
+- `scripts/backfill_embeddings.py` - Generate embeddings for existing videos
+
+**Files Modified**:
+- `db/models.py` - Added `embedding = Column(LargeBinary)` to Video model
+- `pipeline/processor.py` - Integrated embedding generation into video processing
+- `app.py` - Updated History view to use hybrid search
+- `requirements.txt` - Added FlagEmbedding, transformers, scikit-learn
+
+### Usage
+
+**For Users**:
+- Search in History view works automatically (hybrid: keyword + semantic)
+- No configuration needed
+
+**For Developers**:
+- Run `python scripts/backfill_embeddings.py` to generate embeddings for existing videos
+- New videos automatically get embeddings during processing
+
+---
+
+## Original Implementation Plan (For Reference)
+
+**Note**: The plan below was written before implementation and uses a different model (MiniLM instead of BGE-M3). The actual implementation is documented above.
 
 ---
 
