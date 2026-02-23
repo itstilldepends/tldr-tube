@@ -69,3 +69,23 @@ CLAUDE_MODELS = {
 # Default choices
 DEFAULT_WHISPER_MODEL = "medium"
 DEFAULT_CLAUDE_MODEL = "sonnet"
+
+
+def get_claude_model_id(model_name: str) -> str:
+    """
+    Get Claude model ID from model name.
+
+    Args:
+        model_name: Model name ("haiku", "sonnet", "opus")
+
+    Returns:
+        Model ID string for Anthropic API
+
+    Raises:
+        ValueError: If model_name is invalid
+    """
+    model_name_lower = model_name.lower()
+    if model_name_lower not in CLAUDE_MODELS:
+        raise ValueError(f"Invalid model name: {model_name}. Must be one of: {list(CLAUDE_MODELS.keys())}")
+
+    return CLAUDE_MODELS[model_name_lower]["id"]

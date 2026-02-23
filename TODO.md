@@ -70,6 +70,22 @@ Last updated: 2026-02-19
   - Backfill script for existing videos
 - [ ] Stage 3: Advanced filters (future, see SEARCH_ROADMAP.md)
 
+### RAG Q&A System (✅ COMPLETED 2026-02-23)
+- [x] Ask AI page - natural language Q&A interface
+- [x] Video-level semantic search (find relevant videos)
+- [x] Segment-level search (find relevant segments within videos)
+- [x] Context building (summaries + transcript excerpts)
+- [x] Claude API integration for answer generation
+- [x] Citations with video titles and timestamps
+- [x] Cross-language support (auto-detect English/Chinese)
+- [x] Referenced videos display with action buttons
+- [x] Example questions for quick start
+- [x] Model selection (Haiku/Sonnet/Opus)
+- [x] Advanced settings (video count, segments per video)
+- **Architecture**: Transcript-Enhanced RAG (Option B from design doc)
+- **Files**: `pipeline/rag.py`, updated `app.py`
+- **See**: `RAG_DESIGN.md` for full design documentation
+
 ---
 
 ## 🚧 To Do
@@ -368,6 +384,7 @@ streamlit run app.py
 6. ✅ Export summaries to Markdown (English & Chinese)
 7. ✅ Hybrid search (keyword + semantic, BGE-M3 embeddings)
 8. ✅ Automatic embeddings for semantic search
+9. ✅ RAG Q&A system - Ask questions, get AI answers with citations
 
 ### What Doesn't Work Yet
 1. ❌ Collection creation (UI exists, backend not fully functional)

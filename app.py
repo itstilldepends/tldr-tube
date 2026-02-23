@@ -20,6 +20,7 @@ from pipeline.utils import validate_youtube_url, extract_video_id, format_timest
 from pipeline.config import WHISPER_MODELS, CLAUDE_MODELS
 from pipeline.export import export_video_to_markdown, export_collection_to_markdown
 from pipeline.search import hybrid_search
+from pipeline.rag import answer_question
 
 # Load environment variables
 load_dotenv()
@@ -607,6 +608,160 @@ def view_new_collection():
                     st.info("No videos in this collection yet")
 
 
+def view_ask_ai():
+    """Render the Ask AI view - RAG-based Q&A system."""
+    st.title("🤖 Ask AI about Your Videos")
+    st.caption("Ask questions and get AI-generated answers based on your processed videos")
+
+    # Check if there are any videos
+    all_videos = get_all_videos()
+    with get_session() as session:
+        collection_videos = session.query(Video).filter(Video.collection_id.isnot(None)).all()
+        total_videos = len(all_videos) + len(collection_videos)
+
+    if total_videos == 0:
+        st.info("📺 No videos processed yet. Process some videos first to use this feature!")
+        st.markdown("Go to **➕ New Video** to process your first video.")
+        return
+
+    st.info(f"📚 You have {total_videos} video(s) available for Q&A")
+
+    # Model selection
+    col1, col2 = st.columns([3, 1])
+    with col2:
+        selected_model = st.selectbox(
+            "Claude Model",
+            options=list(CLAUDE_MODELS.keys()),
+            index=1,  # Default to Sonnet
+            key="rag_model_select"
+        )
+        model_info = CLAUDE_MODELS[selected_model]
+        st.caption(f"💰 ~{model_info['cost_estimate']}")
+
+    # Question input
+    question = st.text_area(
+        "Ask a question:",
+        placeholder="Examples:\n• How do Python decorators work?\n• Explain async programming\n• What is the difference between let and const in JavaScript?\n• 什么是装饰器？",
+        height=120,
+        key="rag_question_input"
+    )
+
+    # Advanced settings (collapsible)
+    with st.expander("⚙️ Advanced Settings", expanded=False):
+        col1, col2 = st.columns(2)
+        with col1:
+            top_k_videos = st.slider(
+                "Number of videos to search",
+                min_value=1,
+                max_value=5,
+                value=3,
+                help="More videos = more context but slower"
+            )
+        with col2:
+            top_k_segments = st.slider(
+                "Segments per video",
+                min_value=1,
+                max_value=5,
+                value=3,
+                help="Number of relevant segments to extract from each video"
+            )
+
+    # Search button
+    if st.button("🔍 Search & Answer", type="primary", disabled=not question or not question.strip()):
+        if not question or not question.strip():
+            st.warning("⚠️ Please enter a question")
+            return
+
+        with st.spinner("🔍 Searching relevant videos..."):
+            try:
+                # Call RAG pipeline
+                result = answer_question(
+                    question=question.strip(),
+                    top_k_videos=top_k_videos,
+                    top_k_segments=top_k_segments,
+                    model=selected_model.lower(),
+                    min_video_score=0.3
+                )
+
+                if result['status'] == 'no_results':
+                    st.warning("⚠️ " + result['answer'])
+                    st.info("💡 Try processing more videos on this topic or rephrase your question")
+                    return
+
+                # Display answer
+                st.markdown("---")
+                st.markdown("## 💡 Answer")
+
+                # Show answer in a nice box
+                st.markdown(result['answer'])
+
+                # Display referenced videos
+                st.markdown("---")
+                st.markdown("## 📚 Referenced Videos")
+                st.caption(f"Found {len(result['videos'])} relevant video(s)")
+
+                for i, (video, score, match_info) in enumerate(result['videos'], 1):
+                    with st.expander(f"{'🎯' if 'Keyword' in match_info else '💡'} Video {i}: {video.title}", expanded=(i == 1)):
+                        # Match info
+                        st.caption(f"**Relevance**: {match_info} (score: {score:.3f})")
+
+                        # Metadata
+                        col1, col2, col3 = st.columns(3)
+                        with col1:
+                            st.caption(f"📺 {video.channel_name}")
+                        with col2:
+                            if video.duration_seconds:
+                                duration_min = video.duration_seconds // 60
+                                duration_sec = video.duration_seconds % 60
+                                st.caption(f"⏱️ {duration_min}:{duration_sec:02d}")
+                        with col3:
+                            st.caption(f"📝 {video.transcript_source}")
+
+                        # TL;DR
+                        st.markdown("**Summary:**")
+                        st.markdown(video.tldr[:300] + "..." if len(video.tldr) > 300 else video.tldr)
+
+                        # Action buttons
+                        col1, col2 = st.columns(2)
+                        with col1:
+                            if st.button(f"📄 View Full Summary", key=f"view_rag_{video.id}"):
+                                st.session_state.selected_video_id = video.id
+                                st.session_state.return_to_ask_ai = True
+                                # Switch to History view to show the video
+                                st.rerun()
+                        with col2:
+                            video_url = video.source_url
+                            st.markdown(f"[▶️ Watch on YouTube]({video_url})")
+
+                # Show context for debugging (optional)
+                with st.expander("🔍 Debug: View Retrieved Context", expanded=False):
+                    st.text(result.get('context', 'No context available'))
+
+            except Exception as e:
+                st.error(f"❌ Error generating answer: {str(e)}")
+                st.exception(e)
+
+    # Show example questions
+    st.markdown("---")
+    st.markdown("### 💭 Example Questions")
+    st.caption("Click to use:")
+
+    example_questions = [
+        "How do Python decorators work?",
+        "Explain async programming",
+        "What is machine learning?",
+        "什么是装饰器？",
+        "Compare React and Vue",
+    ]
+
+    cols = st.columns(len(example_questions))
+    for i, example in enumerate(example_questions):
+        with cols[i]:
+            if st.button(f"💬 {example[:20]}...", key=f"example_{i}", use_container_width=True):
+                st.session_state.rag_question_input = example
+                st.rerun()
+
+
 def main():
     """Main app entry point."""
 
@@ -624,7 +779,7 @@ def main():
 
     view = st.sidebar.radio(
         "Navigation",
-        ["➕ New Video", "📜 History", "📚 New Collection"],
+        ["➕ New Video", "📜 History", "📚 New Collection", "🤖 Ask AI"],
         label_visibility="collapsed"
     )
 
@@ -638,6 +793,8 @@ def main():
         view_history()
     elif view == "📚 New Collection":
         view_new_collection()
+    elif view == "🤖 Ask AI":
+        view_ask_ai()
 
 
 if __name__ == "__main__":
