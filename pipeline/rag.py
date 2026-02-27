@@ -258,7 +258,8 @@ def answer_question(
     top_k_videos: int = 3,
     top_k_segments: int = 3,
     model: str = "sonnet",
-    min_video_score: float = 0.3
+    min_video_score: float = 0.3,
+    filter_video_ids: Optional[List[int]] = None
 ) -> dict:
     """
     Complete RAG pipeline: search → retrieve → generate answer.
@@ -269,6 +270,7 @@ def answer_question(
         top_k_segments: Number of segments per video
         model: Claude model to use
         min_video_score: Minimum similarity score for video retrieval
+        filter_video_ids: Optional list of video IDs to filter results (only search in these videos)
 
     Returns:
         Dictionary with:
@@ -279,9 +281,19 @@ def answer_question(
     # Step 1: Video-level search
     video_results = hybrid_search(
         query=question,
-        top_k=top_k_videos,
+        top_k=top_k_videos * 2 if filter_video_ids else top_k_videos,  # Get more results if filtering
         min_semantic_score=min_video_score
     )
+
+    # Filter by selected video IDs if provided
+    if filter_video_ids is not None:
+        video_results = [
+            (video, score, match_info)
+            for video, score, match_info in video_results
+            if video.id in filter_video_ids
+        ]
+        # Limit to top_k after filtering
+        video_results = video_results[:top_k_videos]
 
     if not video_results:
         return {

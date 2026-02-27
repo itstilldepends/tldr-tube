@@ -638,6 +638,93 @@ def view_ask_ai():
         model_info = CLAUDE_MODELS[selected_model]
         st.caption(f"💰 ~{model_info['cost_estimate']}")
 
+    # Search Scope Selection
+    with st.expander("🎯 Search Scope (Default: All Videos)", expanded=False):
+        st.caption("Select which videos to search. More focused scope = higher accuracy")
+
+        # Get all collections and videos
+        collections = get_all_collections()
+
+        # Initialize session state for selections if not exists
+        if 'rag_selected_videos' not in st.session_state:
+            # Default: select all videos
+            all_video_ids = set()
+            for video in all_videos:
+                all_video_ids.add(video.id)
+            with get_session() as session:
+                for coll in collections:
+                    for video in coll.videos:
+                        all_video_ids.add(video.id)
+            st.session_state.rag_selected_videos = all_video_ids
+
+        # Select All / Deselect All buttons
+        col1, col2, col3 = st.columns([1, 1, 3])
+        with col1:
+            if st.button("✅ Select All", key="select_all_rag"):
+                all_video_ids = set()
+                for video in all_videos:
+                    all_video_ids.add(video.id)
+                with get_session() as session:
+                    for coll in collections:
+                        for video in coll.videos:
+                            all_video_ids.add(video.id)
+                st.session_state.rag_selected_videos = all_video_ids
+                st.rerun()
+        with col2:
+            if st.button("❌ Deselect All", key="deselect_all_rag"):
+                st.session_state.rag_selected_videos = set()
+                st.rerun()
+
+        # Show selected count
+        selected_count = len(st.session_state.rag_selected_videos)
+        st.caption(f"📊 Selected: {selected_count} / {total_videos} videos")
+
+        st.markdown("---")
+
+        # Collections
+        if collections:
+            st.markdown("### 📚 Collections")
+            for collection in collections:
+                with st.container():
+                    # Collection-level checkbox
+                    collection_video_ids = [v.id for v in collection.videos]
+                    all_selected = all(vid in st.session_state.rag_selected_videos for vid in collection_video_ids)
+
+                    col_selected = st.checkbox(
+                        f"📚 {collection.title} ({len(collection.videos)} videos)",
+                        value=all_selected,
+                        key=f"coll_checkbox_{collection.id}"
+                    )
+
+                    # Update selection for all videos in collection
+                    if col_selected:
+                        st.session_state.rag_selected_videos.update(collection_video_ids)
+                    else:
+                        st.session_state.rag_selected_videos.difference_update(collection_video_ids)
+
+                    # Show individual videos in collection (indented)
+                    if collection.videos:
+                        for video in sorted(collection.videos, key=lambda v: v.order_index or 0):
+                            st.caption(f"  └─ {video.title[:60]}...")
+
+            st.markdown("---")
+
+        # Standalone Videos
+        if all_videos:
+            st.markdown("### 📹 Standalone Videos")
+            for video in all_videos:
+                video_selected = st.checkbox(
+                    video.title[:80] + ("..." if len(video.title) > 80 else ""),
+                    value=video.id in st.session_state.rag_selected_videos,
+                    key=f"video_checkbox_{video.id}"
+                )
+
+                # Update selection
+                if video_selected:
+                    st.session_state.rag_selected_videos.add(video.id)
+                else:
+                    st.session_state.rag_selected_videos.discard(video.id)
+
     # Question input
     question = st.text_area(
         "Ask a question:",
@@ -672,15 +759,21 @@ def view_ask_ai():
             st.warning("⚠️ Please enter a question")
             return
 
+        # Check if any videos are selected
+        if not st.session_state.rag_selected_videos:
+            st.warning("⚠️ Please select at least one video in Search Scope")
+            return
+
         with st.spinner("🔍 Searching relevant videos..."):
             try:
-                # Call RAG pipeline
+                # Call RAG pipeline with selected video IDs
                 result = answer_question(
                     question=question.strip(),
                     top_k_videos=top_k_videos,
                     top_k_segments=top_k_segments,
                     model=selected_model.lower(),
-                    min_video_score=0.3
+                    min_video_score=0.3,
+                    filter_video_ids=list(st.session_state.rag_selected_videos)
                 )
 
                 if result['status'] == 'no_results':
