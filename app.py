@@ -636,7 +636,7 @@ def view_ask_ai():
             key="rag_model_select"
         )
         model_info = CLAUDE_MODELS[selected_model]
-        st.caption(f"💰 ~{model_info['cost_estimate']}")
+        st.caption(f"{model_info['cost']}")
 
     # Search Scope Selection
     with st.expander("🎯 Search Scope (Default: All Videos)", expanded=False):
