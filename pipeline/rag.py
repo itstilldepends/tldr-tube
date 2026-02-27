@@ -240,7 +240,8 @@ INSTRUCTIONS:
 5. If multiple videos cover the topic, synthesize the information
 6. {language_instruction}
 7. Structure your answer with clear paragraphs
-8. At the end, include a "References" section listing which videos and timestamps you cited
+8. If using markdown headings, use ### (three hashes) for section titles, NOT # or ##
+9. At the end, include a "References" section listing which videos and timestamps you cited
 
 ANSWER:"""
 

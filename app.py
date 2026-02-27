@@ -766,7 +766,17 @@ def view_ask_ai():
                 st.markdown("## 💡 Answer")
 
                 # Show answer in a nice box
-                st.markdown(result['answer'])
+                # Replace large headings (# and ##) with smaller ones (###) for better display
+                answer_text = result['answer']
+                answer_text = answer_text.replace('\n# ', '\n### ')
+                answer_text = answer_text.replace('\n## ', '\n### ')
+                # Handle if answer starts with heading
+                if answer_text.startswith('# '):
+                    answer_text = '### ' + answer_text[2:]
+                if answer_text.startswith('## '):
+                    answer_text = '### ' + answer_text[3:]
+
+                st.markdown(answer_text)
 
                 # Display referenced videos
                 st.markdown("---")
