@@ -260,7 +260,8 @@ def answer_question(
     top_k_segments: int = 3,
     model: str = "sonnet",
     min_video_score: float = 0.3,
-    filter_video_ids: Optional[List[int]] = None
+    filter_video_ids: Optional[List[int]] = None,
+    language: Optional[str] = None
 ) -> dict:
     """
     Complete RAG pipeline: search → retrieve → generate answer.
@@ -272,6 +273,7 @@ def answer_question(
         model: Claude model to use
         min_video_score: Minimum similarity score for video retrieval
         filter_video_ids: Optional list of video IDs to filter results (only search in these videos)
+        language: Optional language for answer ("en", "zh", or None for auto-detect)
 
     Returns:
         Dictionary with:
@@ -314,7 +316,8 @@ def answer_question(
     answer = generate_rag_answer(
         question,
         context,
-        model=model
+        model=model,
+        language_hint=language
     )
 
     return {

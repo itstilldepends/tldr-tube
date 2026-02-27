@@ -626,8 +626,8 @@ def view_ask_ai():
 
     st.info(f"📚 You have {total_videos} video(s) available for Q&A")
 
-    # Model selection
-    col1, col2 = st.columns([3, 1])
+    # Model and Language selection
+    col1, col2, col3 = st.columns([2, 1, 1])
     with col2:
         selected_model = st.selectbox(
             "Claude Model",
@@ -637,6 +637,20 @@ def view_ask_ai():
         )
         model_info = CLAUDE_MODELS[selected_model]
         st.caption(f"{model_info['cost']}")
+    with col3:
+        answer_language = st.selectbox(
+            "Answer Language",
+            options=["Auto-detect", "English", "中文"],
+            index=0,  # Default to Auto-detect
+            key="rag_language_select"
+        )
+        # Map display names to language codes
+        language_map = {
+            "Auto-detect": None,
+            "English": "en",
+            "中文": "zh"
+        }
+        selected_language = language_map[answer_language]
 
     # Search Scope Selection
     with st.expander("🎯 Search Scope (Default: All Videos)", expanded=False):
@@ -746,14 +760,15 @@ def view_ask_ai():
 
         with st.spinner("🔍 Searching relevant videos..."):
             try:
-                # Call RAG pipeline with selected video IDs
+                # Call RAG pipeline with selected video IDs and language
                 result = answer_question(
                     question=question.strip(),
                     top_k_videos=3,  # Default: search top 3 videos
                     top_k_segments=3,  # Default: 3 segments per video
                     model=selected_model.lower(),
                     min_video_score=0.3,
-                    filter_video_ids=list(st.session_state.rag_selected_videos)
+                    filter_video_ids=list(st.session_state.rag_selected_videos),
+                    language=selected_language  # User's language choice
                 )
 
                 if result['status'] == 'no_results':
