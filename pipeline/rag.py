@@ -213,9 +213,10 @@ def generate_rag_answer(
 
     # Auto-detect language if not provided
     if language_hint is None:
-        # Simple heuristic: if more than 30% Chinese characters, answer in Chinese
+        # Simple heuristic: if more than 10% Chinese characters, answer in Chinese
+        # Lower threshold because Chinese characters have higher information density
         chinese_chars = sum(1 for c in question if '\u4e00' <= c <= '\u9fff')
-        language_hint = "zh" if chinese_chars / max(len(question), 1) > 0.3 else "en"
+        language_hint = "zh" if chinese_chars / max(len(question), 1) > 0.1 else "en"
 
     language_instruction = {
         "en": "Answer in English.",
