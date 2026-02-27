@@ -728,30 +728,10 @@ def view_ask_ai():
     # Question input
     question = st.text_area(
         "Ask a question:",
-        placeholder="Examples:\n• How do Python decorators work?\n• Explain async programming\n• What is the difference between let and const in JavaScript?\n• 什么是装饰器？",
+        placeholder="Ask anything about your selected videos...",
         height=120,
         key="rag_question_input"
     )
-
-    # Advanced settings (collapsible)
-    with st.expander("⚙️ Advanced Settings", expanded=False):
-        col1, col2 = st.columns(2)
-        with col1:
-            top_k_videos = st.slider(
-                "Number of videos to search",
-                min_value=1,
-                max_value=5,
-                value=3,
-                help="More videos = more context but slower"
-            )
-        with col2:
-            top_k_segments = st.slider(
-                "Segments per video",
-                min_value=1,
-                max_value=5,
-                value=3,
-                help="Number of relevant segments to extract from each video"
-            )
 
     # Search button
     if st.button("🔍 Search & Answer", type="primary", disabled=not question or not question.strip()):
@@ -769,8 +749,8 @@ def view_ask_ai():
                 # Call RAG pipeline with selected video IDs
                 result = answer_question(
                     question=question.strip(),
-                    top_k_videos=top_k_videos,
-                    top_k_segments=top_k_segments,
+                    top_k_videos=3,  # Default: search top 3 videos
+                    top_k_segments=3,  # Default: 3 segments per video
                     model=selected_model.lower(),
                     min_video_score=0.3,
                     filter_video_ids=list(st.session_state.rag_selected_videos)
@@ -833,26 +813,6 @@ def view_ask_ai():
             except Exception as e:
                 st.error(f"❌ Error generating answer: {str(e)}")
                 st.exception(e)
-
-    # Show example questions
-    st.markdown("---")
-    st.markdown("### 💭 Example Questions")
-    st.caption("Click to use:")
-
-    example_questions = [
-        "How do Python decorators work?",
-        "Explain async programming",
-        "What is machine learning?",
-        "什么是装饰器？",
-        "Compare React and Vue",
-    ]
-
-    cols = st.columns(len(example_questions))
-    for i, example in enumerate(example_questions):
-        with cols[i]:
-            if st.button(f"💬 {example[:20]}...", key=f"example_{i}", use_container_width=True):
-                st.session_state.rag_question_input = example
-                st.rerun()
 
 
 def main():
