@@ -17,7 +17,7 @@ from db.operations import (
 )
 from pipeline.processor import process_youtube_video, get_all_videos, delete_video
 from pipeline.utils import validate_youtube_url, extract_video_id, format_timestamp
-from pipeline.config import WHISPER_MODELS, CLAUDE_MODELS
+from pipeline.config import WHISPER_MODELS, CLAUDE_MODELS, LLM_PROVIDERS, check_api_key_configured, get_available_providers
 from pipeline.export import export_video_to_markdown, export_collection_to_markdown
 from pipeline.search import hybrid_search
 from pipeline.rag import answer_question
@@ -270,29 +270,77 @@ def view_new_video():
         st.caption(f"{model_info['speed']} | {model_info['accuracy']}")
 
     with col3:
-        # Build claude model options with details
-        claude_options = []
-        claude_display = {}
-        for key, info in CLAUDE_MODELS.items():
-            display_name = f"{key.capitalize()} - {info['name']}"
-            claude_options.append(display_name)
-            claude_display[display_name] = key
+        # Check available providers
+        available_providers = get_available_providers()
 
-        claude_choice = st.selectbox(
-            "Claude Model",
-            claude_options,
-            index=1,  # Default to "sonnet" (2nd item)
-            help="Model affects quality and cost. Sonnet recommended for most use cases."
+        # LLM Provider selection
+        provider_names = {
+            "claude": "Claude (Recommended ⭐)",
+            "deepseek": "DeepSeek 💎 (95% Cheaper!)",
+            "gemini": "Gemini",
+            "openai": "OpenAI",
+            "qwen": "Qwen 🇨🇳 (Best Chinese)"
+        }
+
+        def format_provider_name(provider):
+            name = provider_names.get(provider, LLM_PROVIDERS[provider]["name"])
+            if not available_providers[provider]["available"]:
+                name += " ⚠️"
+            return name
+
+        selected_provider = st.selectbox(
+            "LLM Provider",
+            options=list(LLM_PROVIDERS.keys()),
+            format_func=format_provider_name,
+            index=0,  # Default to Claude Sonnet
+            help="Claude Sonnet: Best quality. DeepSeek: Best value (95% cheaper)."
         )
-        claude_model = claude_display[claude_choice]
+
+        # Show warning if selected provider is not configured
+        if not available_providers[selected_provider]["available"]:
+            api_key_env = available_providers[selected_provider]["api_key_env"]
+            st.warning(f"⚠️ {api_key_env} not configured. Add it to your .env file.")
+
+    # Model selection in a new row
+    col1, col2, col3 = st.columns(3)
+    with col1:
+        st.empty()  # Spacer
+    with col2:
+        st.empty()  # Spacer
+    with col3:
+        # Get available models for selected provider
+        available_models = LLM_PROVIDERS[selected_provider]["models"]
+
+        # Build model options
+        model_options = []
+        model_display = {}
+        for key, info in available_models.items():
+            display_name = f"{key.capitalize()} - {info['name']}"
+            model_options.append(display_name)
+            model_display[display_name] = key
+
+        # Default model index
+        default_model = LLM_PROVIDERS[selected_provider]["default_model"]
+        default_index = list(available_models.keys()).index(default_model)
+
+        model_choice = st.selectbox(
+            f"{LLM_PROVIDERS[selected_provider]['name']} Model",
+            model_options,
+            index=default_index,
+            help="Model affects quality and cost"
+        )
+        selected_model = model_display[model_choice]
 
         # Show model details
-        model_info = CLAUDE_MODELS[claude_model]
-        st.caption(f"{model_info['quality']} | {model_info['cost']}")
+        model_info = available_models[selected_model]
+        st.caption(f"{model_info.get('quality', '')} | {model_info['cost']}")
 
     st.markdown("---")
 
-    if st.button("Process Video", type="primary", disabled=not url):
+    # Check if selected provider is available before allowing processing
+    provider_available = check_api_key_configured(selected_provider)
+
+    if st.button("Process Video", type="primary", disabled=not url or not provider_available):
         if not validate_youtube_url(url):
             st.error("❌ Invalid YouTube URL. Please check and try again.")
             return
@@ -331,7 +379,8 @@ def view_new_video():
                     status_callback=update_status,
                     force_asr=force_asr,
                     whisper_model=whisper_model,
-                    claude_model=claude_model
+                    provider=selected_provider,
+                    model=selected_model
                 )
 
                 status_container.update(label="✅ Video processed successfully!", state="complete", expanded=False)
@@ -626,16 +675,53 @@ def view_ask_ai():
 
     st.info(f"📚 You have {total_videos} video(s) available for Q&A")
 
-    # Model and Language selection
+    # Provider, Model and Language selection
     col1, col2, col3 = st.columns([2, 1, 1])
+    with col1:
+        # Check available providers
+        available_providers_rag = get_available_providers()
+
+        # LLM Provider selection
+        provider_names_rag = {
+            "claude": "Claude (Recommended ⭐)",
+            "deepseek": "DeepSeek 💎 (95% Cheaper!)",
+            "gemini": "Gemini",
+            "openai": "OpenAI",
+            "qwen": "Qwen 🇨🇳 (Best Chinese)"
+        }
+
+        def format_provider_name_rag(provider):
+            name = provider_names_rag.get(provider, LLM_PROVIDERS[provider]["name"])
+            if not available_providers_rag[provider]["available"]:
+                name += " ⚠️"
+            return name
+
+        selected_provider = st.selectbox(
+            "LLM Provider",
+            options=list(LLM_PROVIDERS.keys()),
+            format_func=format_provider_name_rag,
+            index=0,  # Default to Claude Sonnet
+            key="rag_provider_select"
+        )
+
+        # Show warning if selected provider is not configured
+        if not available_providers_rag[selected_provider]["available"]:
+            api_key_env = available_providers_rag[selected_provider]["api_key_env"]
+            st.warning(f"⚠️ {api_key_env} not configured. Add it to your .env file.")
     with col2:
+        # Get available models for selected provider
+        available_models = LLM_PROVIDERS[selected_provider]["models"]
+        default_model = LLM_PROVIDERS[selected_provider]["default_model"]
+        default_index = list(available_models.keys()).index(default_model)
+
         selected_model = st.selectbox(
-            "Claude Model",
-            options=list(CLAUDE_MODELS.keys()),
-            index=1,  # Default to Sonnet
+            "Model",
+            options=list(available_models.keys()),
+            format_func=lambda x: available_models[x]["name"],
+            index=default_index,
             key="rag_model_select"
         )
-        model_info = CLAUDE_MODELS[selected_model]
+        model_info = available_models[selected_model]
         st.caption(f"{model_info['cost']}")
     with col3:
         answer_language = st.selectbox(
@@ -747,8 +833,11 @@ def view_ask_ai():
         key="rag_question_input"
     )
 
+    # Check if selected provider is available
+    provider_available_rag = check_api_key_configured(selected_provider)
+
     # Search button
-    if st.button("🔍 Search & Answer", type="primary", disabled=not question or not question.strip()):
+    if st.button("🔍 Search & Answer", type="primary", disabled=not question or not question.strip() or not provider_available_rag):
         if not question or not question.strip():
             st.warning("⚠️ Please enter a question")
             return
@@ -765,7 +854,8 @@ def view_ask_ai():
                     question=question.strip(),
                     top_k_videos=3,  # Default: search top 3 videos
                     top_k_segments=3,  # Default: 3 segments per video
-                    model=selected_model.lower(),
+                    provider=selected_provider,
+                    model=selected_model,
                     min_video_score=0.3,
                     filter_video_ids=list(st.session_state.rag_selected_videos),
                     language=selected_language  # User's language choice

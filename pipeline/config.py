@@ -66,9 +66,149 @@ CLAUDE_MODELS = {
     }
 }
 
+# Gemini models (Google API)
+GEMINI_MODELS = {
+    "flash": {
+        "id": "gemini-1.5-flash",
+        "name": "Gemini 1.5 Flash",
+        "speed": "⚡⚡⚡ Very Fast",
+        "quality": "⭐⭐⭐⭐ Good",
+        "cost": "💰 Ultra Cheap (~$0.005/video)",
+        "description": "Fastest, cheapest. Great for most content. 95% cheaper than Claude!"
+    },
+    "flash-2": {
+        "id": "gemini-2.0-flash-exp",
+        "name": "Gemini 2.0 Flash (Experimental)",
+        "speed": "⚡⚡⚡ Very Fast",
+        "quality": "⭐⭐⭐⭐ Good",
+        "cost": "💰 Very Cheap (~$0.01/video)",
+        "description": "Latest experimental model. Fast and affordable."
+    },
+    "pro": {
+        "id": "gemini-1.5-pro",
+        "name": "Gemini 1.5 Pro",
+        "speed": "⚡⚡ Fast",
+        "quality": "⭐⭐⭐⭐⭐ Excellent",
+        "cost": "💰 Cheap (~$0.03/video)",
+        "description": "Best quality. Still 50% cheaper than Claude Sonnet."
+    }
+}
+
+# OpenAI models
+OPENAI_MODELS = {
+    "mini": {
+        "id": "gpt-4o-mini",
+        "name": "GPT-4o Mini",
+        "speed": "⚡⚡⚡ Very Fast",
+        "quality": "⭐⭐⭐⭐ Good",
+        "cost": "💰 Very Cheap (~$0.01/video)",
+        "description": "Fast and affordable. Good for most content."
+    },
+    "standard": {
+        "id": "gpt-4o",
+        "name": "GPT-4o",
+        "speed": "⚡⚡ Fast",
+        "quality": "⭐⭐⭐⭐⭐ Excellent",
+        "cost": "💰💰 Moderate (~$0.06/video)",
+        "description": "Balanced quality and cost. Reliable for complex content."
+    },
+    "reasoning": {
+        "id": "o1",
+        "name": "o1",
+        "speed": "⚡ Slower",
+        "quality": "⭐⭐⭐⭐⭐⭐ Best",
+        "cost": "💰💰💰 Expensive (~$0.25/video)",
+        "description": "Advanced reasoning model. Best for complex analysis."
+    }
+}
+
+# DeepSeek models (OpenAI-compatible)
+DEEPSEEK_MODELS = {
+    "chat": {
+        "id": "deepseek-chat",
+        "name": "DeepSeek Chat",
+        "speed": "⚡⚡⚡ Very Fast",
+        "quality": "⭐⭐⭐⭐⭐ Excellent",
+        "cost": "💰 Cheapest! (~$0.003/video)",
+        "description": "General chat model. 95% cheaper than Claude! 50% cheaper than Gemini!"
+    },
+    "reasoner": {
+        "id": "deepseek-reasoner",
+        "name": "DeepSeek Reasoner",
+        "speed": "⚡⚡ Fast",
+        "quality": "⭐⭐⭐⭐⭐⭐ Best",
+        "cost": "💰 Ultra Cheap (~$0.005/video)",
+        "description": "Advanced reasoning mode. Still 90% cheaper than competitors!"
+    }
+}
+
+# Qwen models (Alibaba Cloud - OpenAI-compatible)
+QWEN_MODELS = {
+    "turbo": {
+        "id": "qwen-turbo",
+        "name": "Qwen Turbo",
+        "speed": "⚡⚡⚡ Very Fast",
+        "quality": "⭐⭐⭐⭐ Good",
+        "cost": "💰 Cheap (~$0.02/video)",
+        "description": "Fast and affordable. Good for most content."
+    },
+    "plus": {
+        "id": "qwen-plus",
+        "name": "Qwen Plus",
+        "speed": "⚡⚡ Fast",
+        "quality": "⭐⭐⭐⭐⭐ Excellent",
+        "cost": "💰 Cheap (~$0.05/video)",
+        "description": "Balanced model. Excellent Chinese understanding."
+    },
+    "max": {
+        "id": "qwen-max",
+        "name": "Qwen Max",
+        "speed": "⚡ Medium",
+        "quality": "⭐⭐⭐⭐⭐⭐ Best",
+        "cost": "💰💰 Moderate (~$0.12/video)",
+        "description": "Best quality. Top-tier Chinese language processing."
+    }
+}
+
+# Unified LLM provider configuration (sorted by recommendation: quality first, then price)
+LLM_PROVIDERS = {
+    "claude": {
+        "name": "Anthropic Claude",
+        "models": CLAUDE_MODELS,
+        "default_model": "sonnet",
+        "api_key_env": "ANTHROPIC_API_KEY"
+    },
+    "deepseek": {
+        "name": "DeepSeek",
+        "models": DEEPSEEK_MODELS,
+        "default_model": "chat",
+        "api_key_env": "DEEPSEEK_API_KEY"
+    },
+    "gemini": {
+        "name": "Google Gemini",
+        "models": GEMINI_MODELS,
+        "default_model": "flash",
+        "api_key_env": "GOOGLE_API_KEY"
+    },
+    "openai": {
+        "name": "OpenAI",
+        "models": OPENAI_MODELS,
+        "default_model": "mini",
+        "api_key_env": "OPENAI_API_KEY"
+    },
+    "qwen": {
+        "name": "Qwen (Alibaba)",
+        "models": QWEN_MODELS,
+        "default_model": "plus",
+        "api_key_env": "DASHSCOPE_API_KEY"
+    }
+}
+
 # Default choices
 DEFAULT_WHISPER_MODEL = "medium"
 DEFAULT_CLAUDE_MODEL = "sonnet"
+DEFAULT_LLM_PROVIDER = "claude"  # Default to Claude Sonnet (best quality and reliability)
+DEFAULT_GEMINI_MODEL = "flash"
 
 
 def get_claude_model_id(model_name: str) -> str:
@@ -89,3 +229,64 @@ def get_claude_model_id(model_name: str) -> str:
         raise ValueError(f"Invalid model name: {model_name}. Must be one of: {list(CLAUDE_MODELS.keys())}")
 
     return CLAUDE_MODELS[model_name_lower]["id"]
+
+
+def get_model_id(provider: str, model_name: str) -> str:
+    """
+    Get model ID for any provider.
+
+    Args:
+        provider: Provider name ("claude", "gemini")
+        model_name: Model name (e.g., "sonnet", "flash")
+
+    Returns:
+        Model ID string for the API
+
+    Raises:
+        ValueError: If provider or model_name is invalid
+    """
+    if provider not in LLM_PROVIDERS:
+        raise ValueError(f"Invalid provider: {provider}. Must be one of: {list(LLM_PROVIDERS.keys())}")
+
+    models = LLM_PROVIDERS[provider]["models"]
+    if model_name not in models:
+        raise ValueError(f"Invalid model for {provider}: {model_name}. Must be one of: {list(models.keys())}")
+
+    return models[model_name]["id"]
+
+
+def check_api_key_configured(provider: str) -> bool:
+    """
+    Check if API key is configured for a provider.
+
+    Args:
+        provider: Provider name (e.g., "claude", "gemini")
+
+    Returns:
+        True if API key is configured, False otherwise
+    """
+    import os
+    if provider not in LLM_PROVIDERS:
+        return False
+
+    api_key_env = LLM_PROVIDERS[provider]["api_key_env"]
+    api_key = os.getenv(api_key_env)
+    return api_key is not None and api_key.strip() != ""
+
+
+def get_available_providers() -> dict:
+    """
+    Get all providers with their availability status.
+
+    Returns:
+        Dictionary with provider names as keys and availability status as values
+        Format: {provider: {"available": bool, "api_key_env": str, "name": str}}
+    """
+    result = {}
+    for provider, config in LLM_PROVIDERS.items():
+        result[provider] = {
+            "available": check_api_key_configured(provider),
+            "api_key_env": config["api_key_env"],
+            "name": config["name"]
+        }
+    return result

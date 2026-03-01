@@ -12,8 +12,8 @@ from db.session import get_session
 from db.models import Video, Segment
 from pipeline.embeddings import load_model, embedding_to_bytes, bytes_to_embedding
 from pipeline.search import hybrid_search
-from pipeline.config import get_claude_model_id
-from anthropic import Anthropic
+from pipeline.config import get_model_id, LLM_PROVIDERS, DEFAULT_LLM_PROVIDER
+from pipeline.llm_client import get_llm_client
 import os
 
 
@@ -194,22 +194,33 @@ def build_rag_context(
 def generate_rag_answer(
     question: str,
     context: str,
-    model: str = "sonnet",
+    provider: str = None,
+    model: str = None,
     language_hint: Optional[str] = None
 ) -> str:
     """
-    Generate answer using Claude with RAG context.
+    Generate answer using LLM with RAG context.
 
     Args:
         question: User's question
         context: Retrieved context (videos + segments + transcripts)
-        model: Claude model to use ("haiku", "sonnet", "opus")
+        provider: LLM provider ("claude", "gemini"). Defaults to config default.
+        model: Model name (provider-specific). Defaults to provider default.
         language_hint: Optional language hint ("en", "zh", or None for auto-detect)
 
     Returns:
         AI-generated answer with citations
     """
-    client = Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY"))
+    # Use default provider if not specified
+    if provider is None:
+        provider = DEFAULT_LLM_PROVIDER
+
+    # Use provider's default model if not specified
+    if model is None:
+        model = LLM_PROVIDERS[provider]["default_model"]
+
+    # Get model ID
+    model_id = get_model_id(provider, model)
 
     # Auto-detect language if not provided
     if language_hint is None:
@@ -246,20 +257,22 @@ INSTRUCTIONS:
 
 ANSWER:"""
 
-    response = client.messages.create(
-        model=get_claude_model_id(model),
+    # Get LLM client and generate
+    llm = get_llm_client(provider)
+    return llm.generate(
+        prompt=prompt,
         max_tokens=3000,
-        messages=[{"role": "user", "content": prompt}]
+        temperature=0.7,
+        model=model_id
     )
-
-    return response.content[0].text
 
 
 def answer_question(
     question: str,
     top_k_videos: int = 3,
     top_k_segments: int = 3,
-    model: str = "sonnet",
+    provider: str = None,
+    model: str = None,
     min_video_score: float = 0.3,
     filter_video_ids: Optional[List[int]] = None,
     language: Optional[str] = None
@@ -271,7 +284,8 @@ def answer_question(
         question: User's question
         top_k_videos: Number of videos to retrieve
         top_k_segments: Number of segments per video
-        model: Claude model to use
+        provider: LLM provider ("claude", "gemini"). Defaults to config default.
+        model: Model name (provider-specific). Defaults to provider default.
         min_video_score: Minimum similarity score for video retrieval
         filter_video_ids: Optional list of video IDs to filter results (only search in these videos)
         language: Optional language for answer ("en", "zh", or None for auto-detect)

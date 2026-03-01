@@ -1,5 +1,5 @@
 """
-Summarize video transcripts using Claude API.
+Summarize video transcripts using LLM APIs (Claude, Gemini, etc).
 
 Functions:
 - restore_punctuation: Fix auto-generated transcripts without punctuation
@@ -10,64 +10,69 @@ import os
 import json
 import ast
 from typing import List, Dict, Tuple
-from anthropic import Anthropic
 from dotenv import load_dotenv
 
 from pipeline.prompts import PUNCTUATION_RESTORE_PROMPT, SUMMARIZATION_PROMPT
 from pipeline.transcript import format_transcript_for_llm
-from pipeline.config import CLAUDE_MODELS, DEFAULT_CLAUDE_MODEL
+from pipeline.config import (
+    CLAUDE_MODELS, DEFAULT_CLAUDE_MODEL,
+    LLM_PROVIDERS, DEFAULT_LLM_PROVIDER, get_model_id
+)
+from pipeline.llm_client import get_llm_client
 
 # Load environment variables
 load_dotenv()
 
-# Initialize Anthropic client
-client = Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY"))
 
-
-def restore_punctuation(transcript: List[Dict], model: str = None) -> List[Dict]:
+def restore_punctuation(
+    transcript: List[Dict],
+    provider: str = None,
+    model: str = None
+) -> List[Dict]:
     """
-    Restore punctuation in auto-generated YouTube transcripts using Claude.
+    Restore punctuation in auto-generated YouTube transcripts using LLM.
 
     Auto-generated transcripts often lack punctuation and paragraph breaks.
-    This function uses Claude to lightly restore punctuation while preserving original text.
+    This function uses an LLM to lightly restore punctuation while preserving original text.
 
     Args:
         transcript: List of transcript entries without punctuation
-        model: Claude model to use ("haiku", "sonnet", "opus").
-               Defaults to DEFAULT_CLAUDE_MODEL from config.
+        provider: LLM provider ("claude", "gemini"). Defaults to config default.
+        model: Model name (provider-specific). Defaults to provider default.
 
     Returns:
         List of transcript entries with restored punctuation
 
     Example:
         >>> transcript = [{"start": 0, "duration": 5, "text": "hello world how are you"}]
-        >>> fixed = restore_punctuation(transcript, model="sonnet")
+        >>> fixed = restore_punctuation(transcript, provider="gemini", model="flash")
         >>> print(fixed[0]["text"])
         "Hello world. How are you?"
     """
-    # Use default model if not specified
+    # Use default provider if not specified
+    if provider is None:
+        provider = DEFAULT_LLM_PROVIDER
+
+    # Use provider's default model if not specified
     if model is None:
-        model = DEFAULT_CLAUDE_MODEL
+        model = LLM_PROVIDERS[provider]["default_model"]
 
-    # Validate model choice
-    if model not in CLAUDE_MODELS:
-        raise ValueError(f"Invalid Claude model: {model}. Valid options: {list(CLAUDE_MODELS.keys())}")
-
-    model_id = CLAUDE_MODELS[model]["id"]
+    # Get model ID
+    model_id = get_model_id(provider, model)
 
     # Format transcript as plain text
     text_only = " ".join([entry["text"] for entry in transcript])
 
-    # Call Claude to restore punctuation
+    # Get LLM client and generate
+    llm = get_llm_client(provider)
     prompt = PUNCTUATION_RESTORE_PROMPT.format(transcript=text_only)
 
-    response = client.messages.create(
-        model=model_id,
-        max_tokens=len(text_only) + 1000,  # Allow some buffer for punctuation
-        messages=[{"role": "user", "content": prompt}]
-    )
-
-    restored_text = response.content[0].text.strip()
+    restored_text = llm.generate(
+        prompt=prompt,
+        max_tokens=len(text_only) + 1000,
+        temperature=0.3,  # Low temperature for consistency
+        model=model_id
+    ).strip()
 
     # Split restored text back into segments (approximate - keeps original timestamps)
     # This is a simple approach; for production could use more sophisticated alignment
@@ -93,20 +98,21 @@ def restore_punctuation(transcript: List[Dict], model: str = None) -> List[Dict]
 def summarize_transcript(
     transcript: List[Dict],
     video_id: str,
+    provider: str = None,
     model: str = None
 ) -> Tuple[str, str, str, List[Dict]]:
     """
     Generate TL;DR and segmented summaries for a video transcript.
 
-    This is a single-pass summarization: Claude sees the entire transcript
+    This is a single-pass summarization: LLM sees the entire transcript
     and generates both the overall TL;DR and time-stamped segment summaries
     in one API call, preserving context and coherence.
 
     Args:
         transcript: List of transcript entries with timestamps
         video_id: YouTube video ID (for error reporting)
-        model: Claude model to use ("haiku", "sonnet", "opus").
-               Defaults to DEFAULT_CLAUDE_MODEL from config.
+        provider: LLM provider ("claude", "gemini"). Defaults to config default.
+        model: Model name (provider-specific). Defaults to provider default.
 
     Returns:
         Tuple of:
@@ -120,11 +126,13 @@ def summarize_transcript(
             - summary_zh: str (Chinese)
 
     Raises:
-        Exception: If Claude API call fails or returns invalid JSON
+        Exception: If LLM API call fails or returns invalid JSON
 
     Example:
         >>> transcript = [...]  # from fetch_youtube_transcript()
-        >>> video_type, tldr, tldr_zh, segments = summarize_transcript(transcript, "abc123", model="sonnet")
+        >>> video_type, tldr, tldr_zh, segments = summarize_transcript(
+        ...     transcript, "abc123", provider="gemini", model="flash"
+        ... )
         >>> print(video_type)
         'tutorial'
         >>> print(tldr)
@@ -134,15 +142,16 @@ def summarize_transcript(
         >>> print(segments[0])
         {'start_seconds': 0.0, 'end_seconds': 285.5, 'summary': '...', 'summary_zh': '...'}
     """
-    # Use default model if not specified
+    # Use default provider if not specified
+    if provider is None:
+        provider = DEFAULT_LLM_PROVIDER
+
+    # Use provider's default model if not specified
     if model is None:
-        model = DEFAULT_CLAUDE_MODEL
+        model = LLM_PROVIDERS[provider]["default_model"]
 
-    # Validate model choice
-    if model not in CLAUDE_MODELS:
-        raise ValueError(f"Invalid Claude model: {model}. Valid options: {list(CLAUDE_MODELS.keys())}")
-
-    model_id = CLAUDE_MODELS[model]["id"]
+    # Get model ID
+    model_id = get_model_id(provider, model)
 
     # Format transcript for LLM
     formatted_transcript = format_transcript_for_llm(transcript)
@@ -151,15 +160,14 @@ def summarize_transcript(
     prompt = SUMMARIZATION_PROMPT.format(transcript=formatted_transcript)
 
     try:
-        # Call Claude API
-        response = client.messages.create(
-            model=model_id,
+        # Get LLM client and generate
+        llm = get_llm_client(provider)
+        response_text = llm.generate(
+            prompt=prompt,
             max_tokens=4096,  # Enough for TL;DR + segments
-            messages=[{"role": "user", "content": prompt}]
-        )
-
-        # Parse JSON response
-        response_text = response.content[0].text.strip()
+            temperature=0.7,
+            model=model_id
+        ).strip()
 
         # Remove markdown code blocks if present (sometimes Claude adds them)
         if response_text.startswith("```"):

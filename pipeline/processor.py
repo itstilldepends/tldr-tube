@@ -26,7 +26,10 @@ def process_youtube_video(
     status_callback: Optional[Callable[[str, str], None]] = None,
     force_asr: bool = False,
     whisper_model: str = "medium",
-    claude_model: str = "sonnet"
+    provider: str = None,
+    model: str = None,
+    # Deprecated parameters (kept for backward compatibility)
+    claude_model: str = None
 ) -> Video:
     """
     Process a YouTube video through the complete pipeline.
@@ -36,7 +39,7 @@ def process_youtube_video(
     2. Fetch metadata (title, duration, channel, thumbnail)
     3. Try YouTube transcript API → fallback to Whisper if needed (or force Whisper if requested)
     4. Restore punctuation if auto-generated
-    5. Summarize with Claude (TL;DR + segments)
+    5. Summarize with LLM (TL;DR + segments)
     6. Persist to database
     7. Return Video object
 
@@ -47,7 +50,9 @@ def process_youtube_video(
         status_callback: Optional - Callback function(step: str, status: str) to report progress
         force_asr: If True, skip YouTube transcript and always use Whisper ASR
         whisper_model: Whisper model size to use ("tiny", "base", "small", "medium", "large")
-        claude_model: Claude model to use ("haiku", "sonnet", "opus")
+        provider: LLM provider ("claude", "gemini", "openai"). Defaults to config default.
+        model: Model name (provider-specific). Defaults to provider default.
+        claude_model: DEPRECATED - Use provider="claude" and model="haiku/sonnet/opus" instead
 
     Returns:
         Video object with all fields populated
@@ -56,7 +61,7 @@ def process_youtube_video(
         Exception: If any step fails
 
     Example:
-        >>> video = process_youtube_video("https://www.youtube.com/watch?v=abc123", claude_model="opus")
+        >>> video = process_youtube_video("https://www.youtube.com/watch?v=abc123", provider="gemini", model="flash")
         >>> print(video.title)
         'Introduction to Algorithms'
         >>> print(video.tldr)
@@ -151,15 +156,22 @@ def process_youtube_video(
             except:
                 pass
 
+    # Handle backward compatibility
+    if claude_model is not None and provider is None:
+        provider = "claude"
+        model = claude_model
+
     # Step 4: Restore punctuation if auto-generated
     if is_auto_generated:
         update_status("Restoring punctuation (auto-generated transcript)", "running")
-        transcript = restore_punctuation(transcript, model=claude_model)
+        transcript = restore_punctuation(transcript, provider=provider, model=model)
         update_status("Punctuation restored", "success")
 
-    # Step 5: Summarize with Claude
-    update_status(f"Generating bilingual summary with Claude {claude_model.capitalize()}", "running")
-    video_type, tldr, tldr_zh, segments = summarize_transcript(transcript, video_id, model=claude_model)
+    # Step 5: Summarize with LLM
+    provider_display = provider or "default"
+    model_display = model or "default"
+    update_status(f"Generating bilingual summary with {provider_display} {model_display}", "running")
+    video_type, tldr, tldr_zh, segments = summarize_transcript(transcript, video_id, provider=provider, model=model)
     update_status(f"Summary generated (type: {video_type}, {len(segments)} segments, EN+ZH)", "success")
 
     # Step 6: Persist to database
