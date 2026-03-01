@@ -144,7 +144,7 @@ def build_rag_context(
         context_parts.append(f"{'=' * 80}")
         context_parts.append(f"Source: {video.source_url}")
         context_parts.append(f"Channel: {video.channel_name}")
-        context_parts.append(f"Duration: {video.duration_seconds // 60}:{video.duration_seconds % 60:02d}")
+        context_parts.append(f"Duration: {int(video.duration_seconds) // 60}:{int(video.duration_seconds) % 60:02d}")
         context_parts.append(f"Relevance: {match_info} (score: {video_score:.3f})")
         context_parts.append("")
         context_parts.append(f"VIDEO SUMMARY:")

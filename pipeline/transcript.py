@@ -1,13 +1,19 @@
 """
-Fetch YouTube transcripts using youtube-transcript-api.
+Fetch video transcripts from YouTube and Bilibili.
 
 Functions:
-- fetch_youtube_transcript: Get transcript with timestamps from YouTube
+- fetch_youtube_transcript: Get transcript with timestamps from YouTube API
+- fetch_bilibili_transcript: Get subtitles from Bilibili via yt-dlp
+- format_transcript_for_llm: Format transcript entries for LLM input
 """
+
+import os
+import re
+import tempfile
+from typing import List, Dict, Tuple
 
 from youtube_transcript_api import YouTubeTranscriptApi
 from youtube_transcript_api._errors import TranscriptsDisabled, NoTranscriptFound
-from typing import List, Dict, Tuple
 
 
 def fetch_youtube_transcript(video_id: str) -> Tuple[List[Dict], bool]:
@@ -69,6 +75,116 @@ def fetch_youtube_transcript(video_id: str) -> Tuple[List[Dict], bool]:
         raise TranscriptsDisabled(f"Transcripts are disabled for video {video_id}")
     except NoTranscriptFound as e:
         raise NoTranscriptFound(f"No transcript found for video {video_id}: {str(e)}")
+
+
+def _vtt_time_to_seconds(time_str: str) -> float:
+    """Convert VTT timestamp (HH:MM:SS.mmm or MM:SS.mmm) to seconds."""
+    parts = time_str.strip().replace(",", ".").split(":")
+    if len(parts) == 3:
+        h, m, s = parts
+        return int(h) * 3600 + int(m) * 60 + float(s)
+    elif len(parts) == 2:
+        m, s = parts
+        return int(m) * 60 + float(s)
+    return float(parts[0])
+
+
+def _parse_vtt(path: str) -> List[Dict]:
+    """
+    Parse a WebVTT subtitle file into standard transcript format.
+
+    Args:
+        path: Path to .vtt file
+
+    Returns:
+        List of [{"start": float, "duration": float, "text": str}, ...]
+    """
+    with open(path, "r", encoding="utf-8") as f:
+        content = f.read()
+
+    entries = []
+    # Split on blank lines to get cue blocks
+    blocks = re.split(r"\n\s*\n", content)
+    for block in blocks:
+        lines = block.strip().splitlines()
+        # Find the timing line: "HH:MM:SS.mmm --> HH:MM:SS.mmm"
+        timing_idx = None
+        for i, line in enumerate(lines):
+            if "-->" in line:
+                timing_idx = i
+                break
+        if timing_idx is None:
+            continue
+
+        timing = lines[timing_idx]
+        start_str, end_str = timing.split("-->")
+        # Strip any positioning tags after the end time
+        end_str = end_str.split()[0]
+
+        start = _vtt_time_to_seconds(start_str.strip())
+        end = _vtt_time_to_seconds(end_str.strip())
+        duration = end - start
+
+        # Text is everything after the timing line, stripped of tags
+        text_lines = lines[timing_idx + 1:]
+        text = " ".join(text_lines).strip()
+        # Remove VTT inline tags like <00:00:01.000><c>text</c>
+        text = re.sub(r"<[^>]+>", "", text).strip()
+
+        if text:
+            entries.append({"start": start, "duration": duration, "text": text})
+
+    return entries
+
+
+def fetch_bilibili_transcript(url: str) -> Tuple[List[Dict], bool]:
+    """
+    Fetch subtitles for a Bilibili video using yt-dlp.
+
+    Tries to download CC subtitles (manual first, then auto-generated).
+    Prefers Chinese subtitles, falls back to English.
+
+    Args:
+        url: Full Bilibili video URL
+
+    Returns:
+        Tuple of:
+        - List of transcript entries: [{"start": float, "duration": float, "text": str}, ...]
+        - is_auto_generated: bool
+
+    Raises:
+        NoTranscriptFound: If no subtitles are available for this video
+    """
+    import yt_dlp
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        ydl_opts = {
+            "writesubtitles": True,
+            "writeautomaticsub": True,
+            "subtitleslangs": ["zh-Hans", "zh", "zh-CN", "en"],
+            "skip_download": True,
+            "outtmpl": os.path.join(tmpdir, "sub"),
+            "quiet": True,
+        }
+        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+            ydl.download([url])
+
+        vtt_files = sorted(
+            [f for f in os.listdir(tmpdir) if f.endswith(".vtt")]
+        )
+        if not vtt_files:
+            raise NoTranscriptFound("No subtitles found for this Bilibili video")
+
+        # Prefer manual subtitles (files without "auto" in name)
+        manual = [f for f in vtt_files if "auto" not in f.lower()]
+        chosen = manual[0] if manual else vtt_files[0]
+        is_auto = "auto" in chosen.lower()
+
+        transcript = _parse_vtt(os.path.join(tmpdir, chosen))
+        if not transcript:
+            raise NoTranscriptFound("Subtitle file was empty or could not be parsed")
+
+        return transcript, is_auto
 
 
 def format_transcript_for_llm(transcript: List[Dict]) -> str:

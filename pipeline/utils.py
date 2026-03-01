@@ -3,6 +3,10 @@ Utility functions for the pipeline.
 
 Functions:
 - extract_video_id: Extract YouTube video ID from URL
+- extract_bilibili_id: Extract Bilibili BV ID from URL
+- detect_source_type: Detect whether a URL is YouTube or Bilibili
+- validate_video_url: Validate YouTube or Bilibili URLs
+- generate_timestamp_link: Generate platform-specific timestamp link
 - format_timestamp: Convert seconds to MM:SS or HH:MM:SS format
 - hash_video_id: Generate unique ID for local/S3 videos
 """
@@ -104,6 +108,95 @@ def hash_video_id(source_url: str) -> str:
     """
     md5_hash = hashlib.md5(source_url.encode("utf-8")).hexdigest()
     return md5_hash[:16]  # Use first 16 chars to keep it manageable
+
+
+def extract_bilibili_id(url: str) -> str:
+    """
+    Extract video ID from a Bilibili URL.
+
+    Supports:
+    - https://www.bilibili.com/video/BV1GJ411x7h7
+    - https://www.bilibili.com/video/av12345678
+
+    Args:
+        url: Bilibili URL string
+
+    Returns:
+        Video ID string (e.g. "BV1GJ411x7h7" or "av12345678")
+
+    Raises:
+        ValueError: If URL is invalid or video ID cannot be extracted
+    """
+    match = re.search(r"bilibili\.com/video/(BV[a-zA-Z0-9]+)", url)
+    if match:
+        return match.group(1)
+
+    match = re.search(r"bilibili\.com/video/av(\d+)", url)
+    if match:
+        return f"av{match.group(1)}"
+
+    raise ValueError(f"Could not extract Bilibili video ID from URL: {url}")
+
+
+def detect_source_type(url: str) -> str:
+    """
+    Detect the video platform from a URL.
+
+    Args:
+        url: Video URL string
+
+    Returns:
+        "youtube" or "bilibili"
+
+    Raises:
+        ValueError: If the URL is not from a supported platform
+    """
+    if "youtube.com" in url or "youtu.be" in url:
+        return "youtube"
+    if "bilibili.com" in url or "b23.tv" in url:
+        return "bilibili"
+    raise ValueError(f"Unsupported video platform: {url}")
+
+
+def validate_video_url(url: str) -> bool:
+    """
+    Check if a URL is a valid YouTube or Bilibili URL.
+
+    Args:
+        url: URL string to validate
+
+    Returns:
+        True if valid, False otherwise
+    """
+    try:
+        source_type = detect_source_type(url)
+        if source_type == "youtube":
+            extract_video_id(url)
+        elif source_type == "bilibili":
+            extract_bilibili_id(url)
+        return True
+    except ValueError:
+        return False
+
+
+def generate_timestamp_link(source_url: str, source_type: str, seconds: int) -> str:
+    """
+    Generate a platform-specific clickable timestamp link.
+
+    Args:
+        source_url: Original video URL
+        source_type: "youtube" or "bilibili"
+        seconds: Timestamp in seconds
+
+    Returns:
+        URL with timestamp parameter appended
+    """
+    if source_type == "youtube":
+        return f"{source_url}&t={seconds}s"
+    elif source_type == "bilibili":
+        base_url = source_url.split("?")[0]
+        return f"{base_url}?t={seconds}"
+    return source_url
 
 
 def validate_youtube_url(url: str) -> bool:

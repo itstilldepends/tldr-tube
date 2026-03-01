@@ -68,8 +68,8 @@ def export_video_to_markdown(video: Video, segments: List[Segment], language: st
     lines.append(f"- **{label_channel}**: {video.channel_name}")
 
     if video.duration_seconds:
-        duration_min = video.duration_seconds // 60
-        duration_sec = video.duration_seconds % 60
+        duration_min = int(video.duration_seconds) // 60
+        duration_sec = int(video.duration_seconds) % 60
         lines.append(f"- **{label_duration}**: {duration_min}:{duration_sec:02d}")
 
     if video.upload_date:

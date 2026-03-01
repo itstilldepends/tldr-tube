@@ -1,7 +1,7 @@
 """
 tldr-tube - Streamlit Web App
 
-YouTube video summarizer with timestamp-anchored summaries.
+YouTube and Bilibili video summarizer with timestamp-anchored summaries.
 """
 
 import os
@@ -15,8 +15,11 @@ from db.operations import (
     create_collection, add_video_to_collection, remove_video_from_collection,
     move_video_in_collection, delete_collection, get_all_collections
 )
-from pipeline.processor import process_youtube_video, get_all_videos, delete_video
-from pipeline.utils import validate_youtube_url, extract_video_id, format_timestamp
+from pipeline.processor import process_video, get_all_videos, delete_video
+from pipeline.utils import (
+    validate_video_url, validate_youtube_url, extract_video_id, extract_bilibili_id,
+    detect_source_type, generate_timestamp_link, format_timestamp
+)
 from pipeline.config import WHISPER_MODELS, CLAUDE_MODELS, LLM_PROVIDERS, check_api_key_configured, get_available_providers
 from pipeline.export import export_video_to_markdown, export_collection_to_markdown
 from pipeline.search import hybrid_search
@@ -66,7 +69,7 @@ def check_password():
             else:
                 st.error("❌ Incorrect password")
 
-    st.caption("Set APP_PASSWORD in .env file")
+    st.caption("Set APP_PASSWORD in .env to enable password protection, or leave it unset to skip this screen.")
 
     return False
 
@@ -79,7 +82,8 @@ def render_video_result(video: Video):
         video: Video object from database
     """
     # Header with metadata
-    st.markdown(f"## 🎬 {video.title}")
+    icon = "🅱️" if video.source_type == "bilibili" else "▶️"
+    st.markdown(f"## {icon} {video.title}")
 
     # Basic metadata row
     col1, col2, col3, col4 = st.columns(4)
@@ -90,8 +94,8 @@ def render_video_result(video: Video):
             st.caption(f"📅 {video.upload_date}")
     with col3:
         if video.duration_seconds:
-            duration_min = video.duration_seconds // 60
-            duration_sec = video.duration_seconds % 60
+            duration_min = int(video.duration_seconds) // 60
+            duration_sec = int(video.duration_seconds) % 60
             st.caption(f"⏱️ {duration_min}:{duration_sec:02d}")
     with col4:
         st.caption(f"📝 {video.transcript_source}")
@@ -189,7 +193,7 @@ def render_video_result(video: Video):
         st.markdown("### 🕒 Timeline")
 
         for segment in segments:
-            youtube_link = f"{video.source_url}&t={int(segment.start_seconds)}s"
+            youtube_link = generate_timestamp_link(video.source_url, video.source_type, int(segment.start_seconds))
             end_timestamp = f"{int(segment.end_seconds // 60):02d}:{int(segment.end_seconds % 60):02d}"
 
             with st.container():
@@ -210,7 +214,7 @@ def render_video_result(video: Video):
         st.markdown("### 🕒 时间线")
 
         for segment in segments:
-            youtube_link = f"{video.source_url}&t={int(segment.start_seconds)}s"
+            youtube_link = generate_timestamp_link(video.source_url, video.source_type, int(segment.start_seconds))
             end_timestamp = f"{int(segment.end_seconds // 60):02d}:{int(segment.end_seconds % 60):02d}"
 
             with st.container():
@@ -229,9 +233,9 @@ def view_new_video():
 
     # Input
     url = st.text_input(
-        "YouTube URL",
-        placeholder="https://www.youtube.com/watch?v=...",
-        help="Enter a YouTube video URL to generate summary"
+        "Video URL",
+        placeholder="https://www.youtube.com/watch?v=... or https://www.bilibili.com/video/BV...",
+        help="Enter a YouTube or Bilibili video URL to generate summary"
     )
 
     # Configuration options
@@ -243,8 +247,8 @@ def view_new_video():
     with col1:
         transcript_source = st.radio(
             "Transcript Source",
-            ["Auto (Prefer YouTube)", "Force Whisper ASR"],
-            help="Auto: Try YouTube captions first, fallback to ASR. Force: Always use Whisper ASR."
+            ["Auto (Prefer captions)", "Force Whisper ASR"],
+            help="Auto: Try platform captions first, fallback to ASR. Force: Always use Whisper ASR."
         )
         force_asr = (transcript_source == "Force Whisper ASR")
 
@@ -341,13 +345,14 @@ def view_new_video():
     provider_available = check_api_key_configured(selected_provider)
 
     if st.button("Process Video", type="primary", disabled=not url or not provider_available):
-        if not validate_youtube_url(url):
-            st.error("❌ Invalid YouTube URL. Please check and try again.")
+        if not validate_video_url(url):
+            st.error("❌ Invalid URL. Supported platforms: YouTube and Bilibili.")
             return
 
         try:
             # Check if already processed
-            video_id = extract_video_id(url)
+            source_type = detect_source_type(url)
+            video_id = extract_video_id(url) if source_type == "youtube" else extract_bilibili_id(url)
             with get_session() as session:
                 existing = session.query(Video).filter_by(video_id=video_id).first()
 
@@ -374,7 +379,7 @@ def view_new_video():
                             st.write(f"❌ {step}")
 
                 # Process video with status callback and user configuration
-                video = process_youtube_video(
+                video = process_video(
                     url,
                     status_callback=update_status,
                     force_asr=force_asr,
@@ -536,7 +541,7 @@ def view_history():
         st.markdown("### 🎬 Standalone Videos")
 
         for video in videos:
-            with st.expander(f"🎬 {video.title}", expanded=False):
+            with st.expander(f"{'🅱️' if video.source_type == 'bilibili' else '▶️'} {video.title}", expanded=False):
                 st.caption(f"📺 {video.channel_name}")
                 st.markdown(video.tldr[:200] + "..." if len(video.tldr) > 200 else video.tldr)
 
@@ -757,23 +762,29 @@ def view_ask_ai():
                         all_video_ids.add(video.id)
             st.session_state.rag_selected_videos = all_video_ids
 
-        # Select All / Deselect All buttons
-        col1, col2, col3 = st.columns([1, 1, 3])
-        with col1:
-            if st.button("✅ Select All", key="select_all_rag"):
-                all_video_ids = set()
-                for video in all_videos:
-                    all_video_ids.add(video.id)
-                with get_session() as session:
-                    for coll in collections:
-                        for video in coll.videos:
-                            all_video_ids.add(video.id)
-                st.session_state.rag_selected_videos = all_video_ids
-                st.rerun()
-        with col2:
-            if st.button("❌ Deselect All", key="deselect_all_rag"):
+        # Compute full set of all video IDs
+        all_ids = set(v.id for v in all_videos)
+        for coll in collections:
+            for v in coll.videos:
+                all_ids.add(v.id)
+
+        all_currently_selected = all_ids.issubset(st.session_state.rag_selected_videos)
+        toggle_label = "❌ Deselect All" if all_currently_selected else "✅ Select All"
+
+        if st.button(toggle_label, key="toggle_all_rag"):
+            if all_currently_selected:
                 st.session_state.rag_selected_videos = set()
-                st.rerun()
+                for video in all_videos:
+                    st.session_state[f"video_checkbox_{video.id}"] = False
+                for coll in collections:
+                    st.session_state[f"coll_checkbox_{coll.id}"] = False
+            else:
+                st.session_state.rag_selected_videos = all_ids.copy()
+                for video in all_videos:
+                    st.session_state[f"video_checkbox_{video.id}"] = True
+                for coll in collections:
+                    st.session_state[f"coll_checkbox_{coll.id}"] = True
+            st.rerun()
 
         # Show selected count
         selected_count = len(st.session_state.rag_selected_videos)
@@ -805,7 +816,8 @@ def view_ask_ai():
                     # Show individual videos in collection (indented)
                     if collection.videos:
                         for video in sorted(collection.videos, key=lambda v: v.order_index or 0):
-                            st.caption(f"  └─ {video.title[:60]}...")
+                            icon = "🅱️" if video.source_type == "bilibili" else "▶️"
+                            st.caption(f"  └─ {icon} {video.title[:60]}...")
 
             st.markdown("---")
 
@@ -813,8 +825,10 @@ def view_ask_ai():
         if all_videos:
             st.markdown("### 📹 Standalone Videos")
             for video in all_videos:
+                icon = "🅱️" if video.source_type == "bilibili" else "▶️"
+                title = video.title[:78] + ("..." if len(video.title) > 78 else "")
                 video_selected = st.checkbox(
-                    video.title[:80] + ("..." if len(video.title) > 80 else ""),
+                    f"{icon} {title}",
                     value=video.id in st.session_state.rag_selected_videos,
                     key=f"video_checkbox_{video.id}"
                 )
@@ -899,8 +913,8 @@ def view_ask_ai():
                             st.caption(f"📺 {video.channel_name}")
                         with col2:
                             if video.duration_seconds:
-                                duration_min = video.duration_seconds // 60
-                                duration_sec = video.duration_seconds % 60
+                                duration_min = int(video.duration_seconds) // 60
+                                duration_sec = int(video.duration_seconds) % 60
                                 st.caption(f"⏱️ {duration_min}:{duration_sec:02d}")
                         with col3:
                             st.caption(f"📝 {video.transcript_source}")
@@ -918,8 +932,8 @@ def view_ask_ai():
                                 # Switch to History view to show the video
                                 st.rerun()
                         with col2:
-                            video_url = video.source_url
-                            st.markdown(f"[▶️ Watch on YouTube]({video_url})")
+                            platform = "Bilibili" if video.source_type == "bilibili" else "YouTube"
+                            st.markdown(f"[▶️ Watch on {platform}]({video.source_url})")
 
                 # Show context for debugging (optional)
                 with st.expander("🔍 Debug: View Retrieved Context", expanded=False):
@@ -952,7 +966,7 @@ def main():
     )
 
     st.sidebar.markdown("---")
-    st.sidebar.caption("YouTube video summarizer with timestamp-anchored summaries")
+    st.sidebar.caption("YouTube & Bilibili video summarizer with timestamp-anchored summaries")
 
     # Route to view
     if view == "➕ New Video":
