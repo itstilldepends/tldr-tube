@@ -375,7 +375,7 @@ def view_new_video():
 
 def view_history():
     """Render the History view with all videos and collections."""
-    st.title("📜 History")
+    st.title("📚 Library")
 
     # Handle delete collection confirmation (at top for visibility)
     if st.session_state.get("confirm_delete_collection_id"):
@@ -561,7 +561,7 @@ def view_history():
             st.markdown("---")
             render_video_result(video)
 
-            if st.button("← Back to History"):
+            if st.button("← Back to Library"):
                 del st.session_state.selected_video_id
                 st.rerun()
 
@@ -589,7 +589,7 @@ def view_history():
 
 def view_new_collection():
     """Render the New Collection view."""
-    st.title("📚 Create New Collection")
+    st.title("➕ Create New Collection")
     st.caption("Create an empty collection, then add existing videos from History")
 
     # Create collection form
@@ -962,7 +962,7 @@ def view_queue():
                     if job.result_video_id:
                         if st.button("📄 View Summary", key=f"view_job_{job.id}"):
                             st.session_state.selected_video_id = job.result_video_id
-                            st.session_state._nav_redirect = "📜 History"
+                            st.session_state._nav_redirect = "📚 Library"
                             st.rerun()
 
                 elif job.status == "failed":
@@ -998,7 +998,7 @@ def main():
     st.sidebar.title("🎬 tldr-tube")
     st.sidebar.markdown("---")
 
-    nav_options = ["➕ New Video", "📋 Queue", "📜 History", "📚 New Collection", "🤖 Ask AI"]
+    nav_options = ["➕ New Video", "➕ New Collection", "📚 Library", "📋 Queue", "🤖 Ask AI"]
 
     # Apply programmatic navigation redirect before the widget is instantiated
     if "_nav_redirect" in st.session_state:
@@ -1017,12 +1017,12 @@ def main():
     # Route to view
     if view == "➕ New Video":
         view_new_video()
+    elif view == "➕ New Collection":
+        view_new_collection()
+    elif view == "📚 Library":
+        view_history()
     elif view == "📋 Queue":
         view_queue()
-    elif view == "📜 History":
-        view_history()
-    elif view == "📚 New Collection":
-        view_new_collection()
     elif view == "🤖 Ask AI":
         view_ask_ai()
 

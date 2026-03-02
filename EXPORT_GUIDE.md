@@ -201,4 +201,42 @@ If you encounter issues with export functionality:
 
 ---
 
+---
+
+## 📄 Example Output / 示例输出
+
+```markdown
+# The Complete Guide to Python Decorators
+
+**Video URL**: https://www.youtube.com/watch?v=example123
+
+## 📊 Metadata
+
+- **Channel**: Python Programming
+- **Duration**: 45:23
+- **Type**: tutorial
+- **Transcript Source**: youtube_api
+- **Processed Date**: 2024-02-19 12:34:56
+
+## 📝 TL;DR
+
+This video provides a comprehensive introduction to Python decorators...
+
+## 🕒 Timeline
+
+### [00:00](https://www.youtube.com/watch?v=example123&t=0s) - to 05:23
+
+Introduction to decorators and why they're useful in Python...
+
+### [05:23](https://www.youtube.com/watch?v=example123&t=323s) - to 12:45
+
+Creating your first decorator - a simple logging decorator...
+
+---
+
+*Exported from tldr-tube on 2024-02-19 12:35:00*
+```
+
+---
+
 **Made with ❤️ for efficient learning**

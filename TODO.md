@@ -68,7 +68,7 @@ Last updated: 2026-02-19
   - Video-level embeddings (768-dim BGE-M3)
   - Automatic embedding generation for new videos
   - Backfill script for existing videos
-- [ ] Stage 3: Advanced filters (future, see SEARCH_ROADMAP.md)
+- [ ] Stage 3: Advanced filters (future)
 
 ### RAG Q&A System (✅ COMPLETED 2026-02-23)
 - [x] Ask AI page - natural language Q&A interface
