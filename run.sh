@@ -45,8 +45,8 @@ if [ ! -f .env ]; then
     echo -e "${YELLOW}⚠️  .env file not found${NC}"
     cp .env.example .env
     echo -e "${YELLOW}📝 Created .env file, please fill in:${NC}"
-    echo "   - ANTHROPIC_API_KEY"
-    echo "   - APP_PASSWORD"
+    echo "   - At least one LLM API key (ANTHROPIC_API_KEY, GOOGLE_API_KEY, DEEPSEEK_API_KEY, etc.)"
+    echo "   - APP_PASSWORD (optional - leave unset to skip password protection)"
     echo ""
     read -p "Press Enter to edit .env file..."
     ${EDITOR:-nano} .env
