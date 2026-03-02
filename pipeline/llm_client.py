@@ -264,6 +264,42 @@ class QwenLLMClient(LLMClient):
         return response.choices[0].message.content
 
 
+class OllamaLLMClient(LLMClient):
+    """Local Ollama client via OpenAI-compatible API (http://localhost:11434/v1)."""
+
+    def __init__(self, **kwargs):
+        """
+        Initialize Ollama client.
+
+        Reads OLLAMA_BASE_URL from environment (default: http://localhost:11434/v1).
+        No API key required — Ollama runs locally.
+        """
+        try:
+            from openai import OpenAI
+        except ImportError:
+            raise ImportError("openai package not installed. Run: pip install openai")
+
+        base_url = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434/v1")
+        self.client = OpenAI(base_url=base_url, api_key="ollama")
+        logger.info(f"Ollama client initialized at {base_url}")
+
+    def generate(
+        self,
+        prompt: str,
+        max_tokens: int = 2000,
+        temperature: float = 0.7,
+        model: str = "qwen2.5:7b"
+    ) -> str:
+        """Generate text using local Ollama model."""
+        response = self.client.chat.completions.create(
+            model=model,
+            max_tokens=max_tokens,
+            temperature=temperature,
+            messages=[{"role": "user", "content": prompt}]
+        )
+        return response.choices[0].message.content
+
+
 def get_llm_client(provider: str, api_key: Optional[str] = None) -> LLMClient:
     """
     Get LLM client by provider name.
@@ -284,6 +320,7 @@ def get_llm_client(provider: str, api_key: Optional[str] = None) -> LLMClient:
         "openai": OpenAILLMClient,
         "deepseek": DeepSeekLLMClient,
         "qwen": QwenLLMClient,
+        "ollama": OllamaLLMClient,
     }
 
     if provider.lower() not in providers:

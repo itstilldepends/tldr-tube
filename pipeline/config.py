@@ -170,6 +170,50 @@ QWEN_MODELS = {
     }
 }
 
+# Ollama models (local, free — user must have them pulled via `ollama pull <model>`)
+OLLAMA_MODELS = {
+    "qwen2.5:7b": {
+        "id": "qwen2.5:7b",
+        "name": "Qwen 2.5 7B",
+        "speed": "⚡⚡ Fast",
+        "quality": "⭐⭐⭐⭐ Good",
+        "cost": "🆓 Free (local, ~4GB RAM)",
+        "description": "Best balance for local use. Strong Chinese support."
+    },
+    "qwen2.5:3b": {
+        "id": "qwen2.5:3b",
+        "name": "Qwen 2.5 3B",
+        "speed": "⚡⚡⚡ Very Fast",
+        "quality": "⭐⭐⭐ Decent",
+        "cost": "🆓 Free (local, ~2GB RAM)",
+        "description": "Lightest Qwen option. Good for shorter videos."
+    },
+    "qwen2.5:14b": {
+        "id": "qwen2.5:14b",
+        "name": "Qwen 2.5 14B",
+        "speed": "⚡ Slower",
+        "quality": "⭐⭐⭐⭐⭐ Excellent",
+        "cost": "🆓 Free (local, ~8GB RAM)",
+        "description": "Best quality local Qwen. Requires more RAM."
+    },
+    "llama3.2:3b": {
+        "id": "llama3.2:3b",
+        "name": "Llama 3.2 3B",
+        "speed": "⚡⚡⚡ Very Fast",
+        "quality": "⭐⭐⭐ Decent",
+        "cost": "🆓 Free (local, ~2GB RAM)",
+        "description": "Fast and lightweight. Better for English content."
+    },
+    "phi4": {
+        "id": "phi4",
+        "name": "Phi 4 14B",
+        "speed": "⚡ Slower",
+        "quality": "⭐⭐⭐⭐⭐ Excellent",
+        "cost": "🆓 Free (local, ~8GB RAM)",
+        "description": "Microsoft's compact but capable model."
+    },
+}
+
 # Unified LLM provider configuration (sorted by recommendation: quality first, then price)
 LLM_PROVIDERS = {
     "claude": {
@@ -201,6 +245,13 @@ LLM_PROVIDERS = {
         "models": QWEN_MODELS,
         "default_model": "plus",
         "api_key_env": "DASHSCOPE_API_KEY"
+    },
+    "ollama": {
+        "name": "Ollama (Local)",
+        "models": OLLAMA_MODELS,
+        "default_model": "qwen2.5:7b",
+        "api_key_env": None,
+        "setup_hint": "Ollama not running. Start it with: ollama serve  (install: brew install ollama)"
     }
 }
 
@@ -255,19 +306,35 @@ def get_model_id(provider: str, model_name: str) -> str:
     return models[model_name]["id"]
 
 
+def _check_ollama_running() -> bool:
+    """Check if Ollama server is reachable at localhost:11434."""
+    import urllib.request
+    base_url = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
+    try:
+        urllib.request.urlopen(base_url, timeout=1)
+        return True
+    except Exception:
+        return False
+
+
 def check_api_key_configured(provider: str) -> bool:
     """
-    Check if API key is configured for a provider.
+    Check if a provider is ready to use.
+
+    For API providers: checks that the API key env var is set.
+    For Ollama: checks that the local server is reachable.
 
     Args:
-        provider: Provider name (e.g., "claude", "gemini")
+        provider: Provider name (e.g., "claude", "gemini", "ollama")
 
     Returns:
-        True if API key is configured, False otherwise
+        True if provider is ready, False otherwise
     """
-    import os
     if provider not in LLM_PROVIDERS:
         return False
+
+    if provider == "ollama":
+        return _check_ollama_running()
 
     api_key_env = LLM_PROVIDERS[provider]["api_key_env"]
     api_key = os.getenv(api_key_env)
@@ -287,6 +354,7 @@ def get_available_providers() -> dict:
         result[provider] = {
             "available": check_api_key_configured(provider),
             "api_key_env": config["api_key_env"],
+            "setup_hint": config.get("setup_hint"),
             "name": config["name"]
         }
     return result

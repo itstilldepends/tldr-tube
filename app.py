@@ -302,8 +302,9 @@ def view_new_video():
 
         # Show warning if selected provider is not configured
         if not available_providers[selected_provider]["available"]:
-            api_key_env = available_providers[selected_provider]["api_key_env"]
-            st.warning(f"⚠️ {api_key_env} not configured. Add it to your .env file.")
+            hint = (available_providers[selected_provider].get("setup_hint")
+                    or f"Set {available_providers[selected_provider]['api_key_env']} in your .env file")
+            st.warning(f"⚠️ {hint}")
 
     # Model selection in a new row
     col1, col2, col3 = st.columns(3)
