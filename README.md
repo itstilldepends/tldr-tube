@@ -102,7 +102,7 @@ ANTHROPIC_API_KEY=sk-ant-...   # Claude: ~$0.10/video
 
 ```bash
 brew install ollama
-ollama pull qwen2.5:7b   # or qwen2.5:3b, llama3.2:3b, phi4, etc.
+ollama pull qwen3:8b     # recommended — or qwen3:4b (8GB RAM), qwen3:14b (32GB RAM)
 ollama serve             # keep this running while using the app
 ```
 
@@ -216,7 +216,7 @@ Approximate cost per 1-hour video:
 
 | Provider | Model | Cost/video |
 |----------|-------|------------|
-| **Ollama** | qwen2.5:7b (local) | **Free** |
+| **Ollama** | qwen3:8b (local) | **Free** |
 | DeepSeek | deepseek-chat | ~$0.003 |
 | Gemini | 2.0 Flash | ~$0.005 |
 | OpenAI | GPT-4o-mini | ~$0.01 |
@@ -260,7 +260,7 @@ Approximate cost per 1-hour video:
 
 ### LLM API error
 For cloud providers: check that your API key is correctly set in `.env` and that you have sufficient credits.
-For Ollama: make sure `ollama serve` is running and the model is pulled (`ollama pull qwen2.5:7b`).
+For Ollama: make sure `ollama serve` is running and the model is pulled (`ollama pull qwen3:8b`).
 
 ---
 

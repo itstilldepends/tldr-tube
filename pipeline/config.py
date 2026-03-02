@@ -172,29 +172,29 @@ QWEN_MODELS = {
 
 # Ollama models (local, free — user must have them pulled via `ollama pull <model>`)
 OLLAMA_MODELS = {
-    "qwen2.5:7b": {
-        "id": "qwen2.5:7b",
-        "name": "Qwen 2.5 7B",
+    "qwen3:8b": {
+        "id": "qwen3:8b",
+        "name": "Qwen 3 8B",
         "speed": "⚡⚡ Fast",
-        "quality": "⭐⭐⭐⭐ Good",
-        "cost": "🆓 Free (local, ~4GB RAM)",
-        "description": "Best balance for local use. Strong Chinese support."
-    },
-    "qwen2.5:3b": {
-        "id": "qwen2.5:3b",
-        "name": "Qwen 2.5 3B",
-        "speed": "⚡⚡⚡ Very Fast",
-        "quality": "⭐⭐⭐ Decent",
-        "cost": "🆓 Free (local, ~2GB RAM)",
-        "description": "Lightest Qwen option. Good for shorter videos."
-    },
-    "qwen2.5:14b": {
-        "id": "qwen2.5:14b",
-        "name": "Qwen 2.5 14B",
-        "speed": "⚡ Slower",
         "quality": "⭐⭐⭐⭐⭐ Excellent",
-        "cost": "🆓 Free (local, ~8GB RAM)",
-        "description": "Best quality local Qwen. Requires more RAM."
+        "cost": "🆓 Free (local, ~6GB RAM)",
+        "description": "Recommended. Best balance for 16GB RAM Macs. Strong bilingual support."
+    },
+    "qwen3:4b": {
+        "id": "qwen3:4b",
+        "name": "Qwen 3 4B",
+        "speed": "⚡⚡⚡ Very Fast",
+        "quality": "⭐⭐⭐⭐ Good",
+        "cost": "🆓 Free (local, ~3GB RAM)",
+        "description": "For 8GB RAM Macs. 256K context window — great for long videos."
+    },
+    "qwen3:14b": {
+        "id": "qwen3:14b",
+        "name": "Qwen 3 14B",
+        "speed": "⚡ Slower",
+        "quality": "⭐⭐⭐⭐⭐⭐ Best",
+        "cost": "🆓 Free (local, ~10GB RAM)",
+        "description": "For 32GB RAM Macs. Highest quality local inference."
     },
     "llama3.2:3b": {
         "id": "llama3.2:3b",
@@ -202,15 +202,15 @@ OLLAMA_MODELS = {
         "speed": "⚡⚡⚡ Very Fast",
         "quality": "⭐⭐⭐ Decent",
         "cost": "🆓 Free (local, ~2GB RAM)",
-        "description": "Fast and lightweight. Better for English content."
+        "description": "Lightweight fallback. Better for English-only content."
     },
     "phi4": {
         "id": "phi4",
         "name": "Phi 4 14B",
         "speed": "⚡ Slower",
         "quality": "⭐⭐⭐⭐⭐ Excellent",
-        "cost": "🆓 Free (local, ~8GB RAM)",
-        "description": "Microsoft's compact but capable model."
+        "cost": "🆓 Free (local, ~10GB RAM)",
+        "description": "Microsoft's compact but capable model. For 32GB RAM Macs."
     },
 }
 
@@ -249,7 +249,7 @@ LLM_PROVIDERS = {
     "ollama": {
         "name": "Ollama (Local)",
         "models": OLLAMA_MODELS,
-        "default_model": "qwen2.5:7b",
+        "default_model": "qwen3:8b",
         "api_key_env": None,
         "setup_hint": "Ollama not running. Start it with: ollama serve  (install: brew install ollama)"
     }
