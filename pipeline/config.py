@@ -4,6 +4,8 @@ Configuration constants for tldr-tube.
 Model options and their characteristics.
 """
 
+import os
+
 # Whisper ASR models (mlx-whisper optimized for Apple Silicon)
 WHISPER_MODELS = {
     "tiny": {

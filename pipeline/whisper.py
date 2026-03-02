@@ -8,6 +8,9 @@ Note: This module requires Apple Silicon (M1/M2/M3) to run.
 Cross-platform support (openai-whisper) is a future TODO.
 """
 
+import os
+os.environ.setdefault("TOKENIZERS_PARALLELISM", "false")
+
 import mlx_whisper
 from typing import List, Dict
 

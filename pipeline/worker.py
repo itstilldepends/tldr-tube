@@ -44,6 +44,7 @@ def start_queue_worker() -> None:
     """
     global _worker_thread
     if _worker_thread is None or not _worker_thread.is_alive():
+        _reset_stuck_jobs()
         _worker_thread = threading.Thread(
             target=_worker_loop,
             name="tldr-tube-worker",
@@ -185,3 +186,19 @@ def _process_job(job: ProcessingJob) -> None:
                 j.error_message = error_msg
                 j.current_step = f"❌ Failed: {error_msg}"
                 session.commit()
+
+
+def _reset_stuck_jobs() -> None:
+    """Reset any 'processing' jobs left over from a previous crash back to 'pending'."""
+    try:
+        with get_session() as session:
+            stuck = session.query(ProcessingJob).filter_by(status="processing").all()
+            for job in stuck:
+                job.status = "pending"
+                job.started_at = None
+                job.current_step = None
+            if stuck:
+                session.commit()
+                logger.info(f"Reset {len(stuck)} stuck job(s) to pending on startup")
+    except Exception as e:
+        logger.warning(f"Could not reset stuck jobs: {e}")

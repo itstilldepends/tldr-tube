@@ -369,7 +369,7 @@ def view_new_video():
                 provider=selected_provider,
                 model=selected_model,
             )
-            st.session_state.nav = "📋 Queue"
+            st.session_state._nav_redirect = "📋 Queue"
             st.rerun()
 
 
@@ -962,7 +962,7 @@ def view_queue():
                     if job.result_video_id:
                         if st.button("📄 View Summary", key=f"view_job_{job.id}"):
                             st.session_state.selected_video_id = job.result_video_id
-                            st.session_state.nav = "📜 History"
+                            st.session_state._nav_redirect = "📜 History"
                             st.rerun()
 
                 elif job.status == "failed":
@@ -999,6 +999,10 @@ def main():
     st.sidebar.markdown("---")
 
     nav_options = ["➕ New Video", "📋 Queue", "📜 History", "📚 New Collection", "🤖 Ask AI"]
+
+    # Apply programmatic navigation redirect before the widget is instantiated
+    if "_nav_redirect" in st.session_state:
+        st.session_state["nav"] = st.session_state.pop("_nav_redirect")
 
     view = st.sidebar.radio(
         "Navigation",
