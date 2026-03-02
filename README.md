@@ -55,7 +55,7 @@ Save time taking notes on YouTube and Bilibili videos with AI-powered, timestamp
 
 - **macOS with Apple Silicon** (M1/M2/M3) - required for mlx-whisper
 - **Conda** (Miniconda or Anaconda) - [Install Miniconda](https://docs.conda.io/en/latest/miniconda.html) or via Homebrew: `brew install --cask miniconda`
-- **At least one LLM API key** (see [Environment Variables](#environment-variables) below)
+- **LLM access** — either an API key for a cloud provider, or [Ollama](https://ollama.com) for free local inference (no API key needed)
 
 ### Setup
 
@@ -64,9 +64,10 @@ Save time taking notes on YouTube and Bilibili videos with AI-powered, timestamp
 git clone https://github.com/itstilldepends/tldr-tube.git
 cd tldr-tube
 
-# Copy environment variables template and fill in your API key(s)
+# Copy environment variables template
 cp .env.example .env
-# Edit .env — add at least one LLM API key (APP_PASSWORD is optional)
+# Edit .env — add at least one LLM API key, or use Ollama for free local inference
+# APP_PASSWORD is optional
 
 # Run the app
 ./run.sh
@@ -85,17 +86,31 @@ The app opens at `http://localhost:8501`
 
 ## Environment Variables
 
-Copy `.env.example` to `.env` and fill in at least one LLM API key:
+Copy `.env.example` to `.env`. You need **at least one** LLM option — either a cloud API key or Ollama running locally.
+
+### Option A: Cloud API (pick one or more)
 
 ```bash
-# LLM API Keys — add at least one
-
 DEEPSEEK_API_KEY=sk-...        # Cheapest: ~$0.003/video
 GOOGLE_API_KEY=AIza...         # Gemini: ~$0.005/video
 OPENAI_API_KEY=sk-proj-...     # GPT-4o-mini: ~$0.01/video
 DASHSCOPE_API_KEY=sk-...       # Qwen (best for Chinese content)
 ANTHROPIC_API_KEY=sk-ant-...   # Claude: ~$0.10/video
+```
 
+### Option B: Ollama (local, free, no API key needed)
+
+```bash
+brew install ollama
+ollama pull qwen2.5:7b   # or qwen2.5:3b, llama3.2:3b, phi4, etc.
+ollama serve             # keep this running while using the app
+```
+
+Then select **Ollama (Local)** as the provider in the app. No `.env` changes needed.
+
+### Other settings
+
+```bash
 # Optional: password-protect the app
 # If unset, the app is accessible without a password
 # APP_PASSWORD=your_secure_password
@@ -201,6 +216,7 @@ Approximate cost per 1-hour video:
 
 | Provider | Model | Cost/video |
 |----------|-------|------------|
+| **Ollama** | qwen2.5:7b (local) | **Free** |
 | DeepSeek | deepseek-chat | ~$0.003 |
 | Gemini | 2.0 Flash | ~$0.005 |
 | OpenAI | GPT-4o-mini | ~$0.01 |
@@ -243,7 +259,8 @@ Approximate cost per 1-hour video:
 **Solution**: Already using WAL mode in `db/session.py`
 
 ### LLM API error
-Check that your API key is correctly set in `.env` and that you have sufficient credits.
+For cloud providers: check that your API key is correctly set in `.env` and that you have sufficient credits.
+For Ollama: make sure `ollama serve` is running and the model is pulled (`ollama pull qwen2.5:7b`).
 
 ---
 
