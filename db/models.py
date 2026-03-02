@@ -5,10 +5,11 @@ Models:
 - Collection: Group of related videos (e.g., a course)
 - Video: Individual video with metadata and summary
 - Segment: Time-stamped summary segment within a video
+- ProcessingJob: Background queue entry for video processing
 """
 
 from datetime import datetime
-from sqlalchemy import Column, Integer, String, Text, DateTime, Float, ForeignKey, LargeBinary
+from sqlalchemy import Column, Integer, String, Text, DateTime, Float, ForeignKey, LargeBinary, Boolean
 from sqlalchemy.orm import declarative_base, relationship
 
 Base = declarative_base()
@@ -102,3 +103,34 @@ class Segment(Base):
 
     def __repr__(self):
         return f"<Segment(id={self.id}, timestamp='{self.timestamp}', video_id={self.video_id})>"
+
+
+class ProcessingJob(Base):
+    """A queued video processing job, processed by the background worker."""
+
+    __tablename__ = "processing_jobs"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    url = Column(String(1000), nullable=False)
+    status = Column(String(20), nullable=False, default="pending", index=True)
+    # "pending" | "processing" | "completed" | "failed"
+
+    created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
+    started_at = Column(DateTime, nullable=True)
+    completed_at = Column(DateTime, nullable=True)
+
+    # Processing config captured at submission time
+    force_asr = Column(Boolean, nullable=False, default=False)
+    whisper_model = Column(String(20), nullable=False, default="medium")
+    provider = Column(String(50), nullable=True)
+    model = Column(String(100), nullable=True)
+
+    # Progress & results
+    current_step = Column(String(500), nullable=True)   # last step persisted to DB
+    error_message = Column(Text, nullable=True)
+    result_video_id = Column(Integer, ForeignKey("videos.id"), nullable=True)
+
+    result_video = relationship("Video")
+
+    def __repr__(self):
+        return f"<ProcessingJob(id={self.id}, status='{self.status}', url='{self.url[:40]}...')>"

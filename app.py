@@ -13,9 +13,11 @@ from db.session import init_db, get_session
 from db.models import Video, Segment, Collection
 from db.operations import (
     create_collection, add_video_to_collection, remove_video_from_collection,
-    move_video_in_collection, delete_collection, get_all_collections
+    move_video_in_collection, delete_collection, get_all_collections,
+    create_job, get_all_jobs,
 )
 from pipeline.processor import process_video, get_all_videos, delete_video
+from pipeline.worker import start_queue_worker, get_job_progress
 from pipeline.utils import (
     validate_video_url, validate_youtube_url, extract_video_id, extract_bilibili_id,
     detect_source_type, generate_timestamp_link, format_timestamp
@@ -345,56 +347,30 @@ def view_new_video():
     # Check if selected provider is available before allowing processing
     provider_available = check_api_key_configured(selected_provider)
 
-    if st.button("Process Video", type="primary", disabled=not url or not provider_available):
+    if st.button("Add to Queue", type="primary", disabled=not url or not provider_available):
         if not validate_video_url(url):
             st.error("❌ Invalid URL. Supported platforms: YouTube and Bilibili.")
             return
 
-        try:
-            # Check if already processed
-            source_type = detect_source_type(url)
-            video_id = extract_video_id(url) if source_type == "youtube" else extract_bilibili_id(url)
-            with get_session() as session:
-                existing = session.query(Video).filter_by(video_id=video_id).first()
+        # Check if already processed (show cached result immediately)
+        source_type = detect_source_type(url)
+        video_id = extract_video_id(url) if source_type == "youtube" else extract_bilibili_id(url)
+        with get_session() as session:
+            existing = session.query(Video).filter_by(video_id=video_id).first()
 
-            if existing:
-                st.success("✅ Video already processed! Showing cached result:")
-                render_video_result(existing)
-            else:
-                # Process new video with progress tracking
-                status_container = st.status("🔄 Processing video...", expanded=True)
-                steps = []
-
-                def update_status(step: str, state: str):
-                    """Callback to update UI status."""
-                    if state == "running":
-                        steps.append({"step": step, "state": "running"})
-                        with status_container:
-                            st.write(f"⏳ {step}...")
-                    elif state == "success":
-                        # Update the last running step or add new success
-                        with status_container:
-                            st.write(f"✅ {step}")
-                    elif state == "error":
-                        with status_container:
-                            st.write(f"❌ {step}")
-
-                # Process video with status callback and user configuration
-                video = process_video(
-                    url,
-                    status_callback=update_status,
-                    force_asr=force_asr,
-                    whisper_model=whisper_model,
-                    provider=selected_provider,
-                    model=selected_model
-                )
-
-                status_container.update(label="✅ Video processed successfully!", state="complete", expanded=False)
-                render_video_result(video)
-
-        except Exception as e:
-            st.error(f"❌ Error processing video: {str(e)}")
-            st.exception(e)
+        if existing:
+            st.success("✅ Video already processed! Showing cached result:")
+            render_video_result(existing)
+        else:
+            create_job(
+                url=url,
+                force_asr=force_asr,
+                whisper_model=whisper_model,
+                provider=selected_provider,
+                model=selected_model,
+            )
+            st.session_state.nav = "📋 Queue"
+            st.rerun()
 
 
 def view_history():
@@ -945,12 +921,74 @@ def view_ask_ai():
                 st.exception(e)
 
 
+def view_queue():
+    """Render the Queue view showing all processing jobs."""
+    st.title("📋 Processing Queue")
+    st.caption("Videos are processed one at a time in the background. Close the tab and come back — jobs keep running.")
+
+    @st.fragment(run_every=2)
+    def _queue_live_panel():
+        jobs = get_all_jobs(limit=50)
+
+        if not jobs:
+            st.info("No jobs yet. Add a video from ➕ New Video.")
+            return
+
+        for job in jobs:
+            icon = "🅱️" if "bilibili" in job.url else "▶️"
+            with st.container(border=True):
+                col1, col2 = st.columns([5, 1])
+                with col1:
+                    st.markdown(f"**{icon} {job.url}**")
+                with col2:
+                    st.caption(job.created_at.strftime("%H:%M:%S"))
+
+                if job.status == "pending":
+                    st.caption("🕐 Waiting in queue...")
+
+                elif job.status == "processing":
+                    steps = get_job_progress(job.id)
+                    if steps:
+                        for step in steps:
+                            st.caption(step)
+                    elif job.current_step:
+                        # Fallback: tab was closed and reopened — show last DB-persisted step
+                        st.caption(job.current_step)
+                    else:
+                        st.caption("⏳ Processing...")
+
+                elif job.status == "completed":
+                    st.success("✅ Done")
+                    if job.result_video_id:
+                        if st.button("📄 View Summary", key=f"view_job_{job.id}"):
+                            st.session_state.selected_video_id = job.result_video_id
+                            st.session_state.nav = "📜 History"
+                            st.rerun()
+
+                elif job.status == "failed":
+                    st.error(f"❌ {job.error_message or 'Unknown error'}")
+                    if st.button("🔄 Retry", key=f"retry_job_{job.id}"):
+                        create_job(
+                            url=job.url,
+                            force_asr=job.force_asr,
+                            whisper_model=job.whisper_model,
+                            provider=job.provider,
+                            model=job.model,
+                        )
+                        st.rerun()
+
+    _queue_live_panel()
+
+
 def main():
     """Main app entry point."""
 
     # Initialize database (creates tables if they don't exist)
     # This is idempotent - safe to call every time
     init_db()
+
+    # Start background queue worker (idempotent — only starts once per process)
+    start_queue_worker()
 
     # Check password
     if not check_password():
@@ -960,10 +998,13 @@ def main():
     st.sidebar.title("🎬 tldr-tube")
     st.sidebar.markdown("---")
 
+    nav_options = ["➕ New Video", "📋 Queue", "📜 History", "📚 New Collection", "🤖 Ask AI"]
+
     view = st.sidebar.radio(
         "Navigation",
-        ["➕ New Video", "📜 History", "📚 New Collection", "🤖 Ask AI"],
-        label_visibility="collapsed"
+        nav_options,
+        label_visibility="collapsed",
+        key="nav"
     )
 
     st.sidebar.markdown("---")
@@ -972,6 +1013,8 @@ def main():
     # Route to view
     if view == "➕ New Video":
         view_new_video()
+    elif view == "📋 Queue":
+        view_queue()
     elif view == "📜 History":
         view_history()
     elif view == "📚 New Collection":

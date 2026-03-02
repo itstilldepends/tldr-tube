@@ -8,7 +8,7 @@ from typing import List, Optional
 from sqlalchemy.orm import Session, joinedload
 
 from db.session import get_session
-from db.models import Collection, Video
+from db.models import Collection, Video, ProcessingJob
 
 
 def create_collection(title: str, description: Optional[str] = None) -> Collection:
@@ -223,3 +223,90 @@ def _reorder_collection(session: Session, collection_id: int, removed_index: int
         video.order_index -= 1
 
     session.commit()
+
+
+# ──────────────────────────────────────────────
+# ProcessingJob operations
+# ──────────────────────────────────────────────
+
+def create_job(
+    url: str,
+    force_asr: bool = False,
+    whisper_model: str = "medium",
+    provider: Optional[str] = None,
+    model: Optional[str] = None,
+) -> ProcessingJob:
+    """
+    Create a new pending processing job and add it to the queue.
+
+    Args:
+        url: YouTube or Bilibili video URL
+        force_asr: Skip platform captions and use Whisper
+        whisper_model: Whisper model size
+        provider: LLM provider name
+        model: LLM model name
+
+    Returns:
+        Created ProcessingJob object
+
+    Example:
+        >>> job = create_job("https://www.youtube.com/watch?v=abc123", provider="deepseek")
+        >>> print(job.status)
+        'pending'
+    """
+    with get_session() as session:
+        job = ProcessingJob(
+            url=url,
+            force_asr=force_asr,
+            whisper_model=whisper_model,
+            provider=provider,
+            model=model,
+        )
+        session.add(job)
+        session.commit()
+        session.refresh(job)
+        session.expunge(job)
+    return job
+
+
+def get_all_jobs(limit: int = 50) -> List[ProcessingJob]:
+    """
+    Get recent processing jobs ordered newest first.
+
+    Eagerly loads result_video relationship.
+
+    Args:
+        limit: Maximum number of jobs to return
+
+    Returns:
+        List of ProcessingJob objects
+    """
+    from sqlalchemy.orm import joinedload as _joinedload
+
+    with get_session() as session:
+        jobs = (
+            session.query(ProcessingJob)
+            .options(_joinedload(ProcessingJob.result_video))
+            .order_by(ProcessingJob.created_at.desc())
+            .limit(limit)
+            .all()
+        )
+        session.expunge_all()
+    return jobs
+
+
+def get_job(job_id: int) -> Optional[ProcessingJob]:
+    """
+    Get a single processing job by ID.
+
+    Args:
+        job_id: ProcessingJob primary key
+
+    Returns:
+        ProcessingJob if found, None otherwise
+    """
+    with get_session() as session:
+        job = session.query(ProcessingJob).filter_by(id=job_id).first()
+        if job:
+            session.expunge(job)
+    return job
