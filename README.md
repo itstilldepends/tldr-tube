@@ -35,6 +35,12 @@ Save time taking notes on YouTube and Bilibili videos with AI-powered, timestamp
 - Download summaries as Markdown (English or Chinese)
 - Perfect for Notion, Obsidian, or any note-taking app
 
+✅ **MCP Server**
+- Expose the entire pipeline as an MCP server for AI agents
+- Tools: process video, search, RAG Q&A, browse library
+- Resources: `video:///{id}`, `collection:///{id}` (Markdown)
+- Works with Claude Desktop, openclaw, and any MCP-compatible agent
+
 ---
 
 ## Tech Stack
@@ -46,6 +52,7 @@ Save time taking notes on YouTube and Bilibili videos with AI-powered, timestamp
 - **yt-dlp** - Video metadata, audio download, and Bilibili subtitles
 - **Multiple LLM providers** - Claude, Gemini, OpenAI, DeepSeek, Qwen
 - **SQLAlchemy + SQLite** - Database (Postgres-ready)
+- **MCP** - Model Context Protocol server for agent integration
 
 ---
 
@@ -151,6 +158,58 @@ Go to **🤖 Ask AI** to ask questions about your video library. Optionally narr
 
 After viewing a processed video, find the **💾 Export Summary** section and download as Markdown (English or Chinese).
 
+### MCP Server (for AI agents)
+
+tldr-tube can run as an MCP server, letting AI agents (Claude Desktop, openclaw, etc.) call your video library directly as tools.
+
+**Setup (once):**
+```bash
+pip install -e .
+```
+
+**Register in your MCP client** (e.g. `~/.claude/mcp_settings.json`):
+```json
+{
+  "mcpServers": {
+    "tldr-tube": {
+      "command": "/path/to/tldr-tube/run_mcp.sh"
+    }
+  }
+}
+```
+
+`run_mcp.sh` handles conda environment activation automatically, so the MCP client doesn't need to know anything about the Python environment.
+
+**Available tools:**
+
+| Tool | Description |
+|------|-------------|
+| `process_video` | Process a YouTube/Bilibili URL → bilingual summary + segments |
+| `search_videos` | Hybrid semantic + keyword search across your library |
+| `ask_videos` | RAG Q&A — ask questions, get answers with citations |
+| `list_videos` | List all processed standalone videos |
+| `list_collections` | List all collections with video counts |
+| `get_video_segments` | Get all timestamped segments for a video |
+
+**Available resources:**
+
+| URI | Description |
+|-----|-------------|
+| `video:///{video_id}` | Full Markdown summary of a video |
+| `collection:///{id}` | Markdown overview of an entire collection |
+
+**Testing with MCP Inspector:**
+
+```bash
+# Requires Node.js (one-time): brew install node
+conda activate tldr-tube
+mcp dev mcp_server.py
+```
+
+This starts the [MCP Inspector](https://github.com/modelcontextprotocol/inspector) — a browser UI at `http://localhost:5173` where you can call each tool interactively and inspect the responses. No MCP client (Claude Desktop etc.) needed. Node.js is only required for this dev tool, not for running the server normally.
+
+> **Note:** The MCP server uses stdio transport and runs locally only. The MCP client spawns it as a subprocess — no network port is exposed. Remote access (SSE transport) is possible but not implemented, as it would require adding authentication to protect the API keys on the server.
+
 ---
 
 ## How It Works
@@ -182,7 +241,10 @@ Save to database → Display results
 ```
 tldr-tube/
 ├── app.py                  # Streamlit web UI
-├── run.sh                  # Startup script (setup + launch)
+├── mcp_server.py           # MCP server (AI agent integration)
+├── run_mcp.sh              # MCP server launcher (handles conda env activation)
+├── pyproject.toml          # Package config & entry point (tldr-tube-mcp)
+├── run.sh                  # Streamlit startup script (setup + launch)
 ├── db/
 │   ├── models.py           # SQLAlchemy models (Collection, Video, Segment)
 │   ├── session.py          # Database engine & session
@@ -235,6 +297,7 @@ Approximate cost per 1-hour video:
 - [x] Keyword search
 - [x] Ask AI (RAG over your video library)
 - [x] Multi-LLM provider support
+- [x] MCP server for AI agent integration
 
 ### Planned
 - [ ] Local file upload (MP4/MOV)
