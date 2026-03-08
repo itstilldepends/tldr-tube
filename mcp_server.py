@@ -33,8 +33,10 @@ from mcp.server.fastmcp import Context, FastMCP
 from sqlalchemy.orm import joinedload
 
 from db.models import Collection, Video
-from db.operations import get_all_collections
+from db.operations import create_collection, get_all_collections
 from db.session import get_session, init_db
+from pipeline.metadata import fetch_deeplearning_course_lessons
+from pipeline.utils import detect_source_type
 from pipeline.export import export_collection_to_markdown, export_video_to_markdown
 from pipeline.processor import (
     get_all_videos,
@@ -136,14 +138,21 @@ async def process_video_tool(
     ctx: Context = None,
 ) -> dict:
     """
-    Process a YouTube or Bilibili video URL through the full pipeline.
+    Process a single video URL through the full pipeline.
 
     Fetches the transcript, generates bilingual (EN + ZH) TL;DR and
     timestamped segment summaries using an LLM, and caches the result.
     Returns immediately for already-cached videos.
 
+    Supported sources:
+    - YouTube: youtube.com/watch?v=... or youtu.be/...
+    - Bilibili: bilibili.com/video/BV...
+    - DeepLearning.AI lesson: learn.deeplearning.ai/courses/.../lesson/...
+
+    For a full DeepLearning.AI course URL use process_course instead.
+
     Args:
-        url: Full YouTube (youtube.com/watch?v=... or youtu.be/...) or Bilibili URL
+        url: Video URL (YouTube, Bilibili, or DeepLearning.AI lesson)
         provider: LLM provider - "claude", "gemini", "openai", "deepseek",
                   "qwen", or "ollama". Defaults to "claude".
         model: Provider-specific model name (e.g. "sonnet", "flash").
@@ -198,6 +207,119 @@ async def process_video_tool(
     if ctx:
         await ctx.info(f"Done — {len(result.get('segments', []))} segments generated.")
     return result
+
+
+@mcp.tool()
+async def process_course(
+    url: str,
+    provider: str = "claude",
+    model: Optional[str] = None,
+    ctx: Context = None,
+) -> dict:
+    """
+    Process a DeepLearning.AI course as a Collection.
+
+    Fetches all accessible video lessons from the course page, creates a
+    Collection, then processes each lesson sequentially through the full
+    pipeline (transcript → bilingual summary → DB + embeddings).
+
+    Lessons that require authentication and are locked are counted but skipped
+    with a clear error rather than failing silently.
+
+    Args:
+        url: DeepLearning.AI course URL
+             (e.g. https://learn.deeplearning.ai/courses/agent-skills-with-anthropic)
+             For individual lessons use process_video instead.
+        provider: LLM provider for summarization. Defaults to "claude".
+        model: Provider-specific model name. Omit to use provider default.
+
+    Returns:
+        dict with collection_id, total/locked/processed counts, and per-lesson results.
+    """
+    source_type = detect_source_type(url)
+    if source_type != "deeplearning_course":
+        raise ValueError(
+            f"Expected a course URL (learn.deeplearning.ai/courses/{{slug}}), "
+            f"got source_type='{source_type}'. For individual lessons use process_video."
+        )
+
+    if ctx:
+        await ctx.info(f"Fetching course info: {url}")
+
+    course_name, lessons, locked_count = await asyncio.to_thread(
+        fetch_deeplearning_course_lessons, url
+    )
+
+    if ctx:
+        lock_note = f", {locked_count} locked (login required)" if locked_count else ""
+        await ctx.info(f"Course: '{course_name}' — {len(lessons)} accessible lessons{lock_note}")
+
+    collection = await asyncio.to_thread(create_collection, course_name)
+
+    if ctx:
+        await ctx.info(f"Created collection id={collection.id}")
+
+    results = []
+    for lesson in lessons:
+        if ctx:
+            await ctx.info(f"[{lesson['order_index'] + 1}/{len(lessons)}] {lesson['title']}")
+
+        progress_log: list[str] = []
+
+        def _callback(step: str, status: str) -> None:
+            prefix = {"running": "[...]", "success": "[OK ]", "error": "[ERR]"}.get(status, "[   ]")
+            progress_log.append(f"{prefix} {step}")
+
+        try:
+            video = await asyncio.to_thread(
+                _process_video,
+                url=lesson["url"],
+                collection_id=collection.id,
+                order_index=lesson["order_index"],
+                status_callback=_callback,
+                provider=provider,
+                model=model,
+            )
+
+            def _fetch(video_id: int) -> dict:
+                with get_session() as session:
+                    fresh = (
+                        session.query(Video)
+                        .filter_by(id=video_id)
+                        .first()
+                    )
+                    return _serialize_video(fresh, include_segments=False)
+
+            result = await asyncio.to_thread(_fetch, video.id)
+            result["status"] = "ok"
+            results.append(result)
+
+            if ctx:
+                await ctx.info(f"  ✅ {lesson['title']}")
+
+        except Exception as exc:
+            if ctx:
+                await ctx.info(f"  ❌ {lesson['title']}: {exc}")
+            results.append({
+                "title": lesson["title"],
+                "url": lesson["url"],
+                "status": "error",
+                "error": str(exc),
+            })
+
+    ok_count = sum(1 for r in results if r.get("status") == "ok")
+
+    if ctx:
+        await ctx.info(f"Done — {ok_count}/{len(lessons)} lessons processed.")
+
+    return {
+        "collection_id": collection.id,
+        "collection_title": course_name,
+        "total_lessons": len(lessons),
+        "locked_lessons": locked_count,
+        "processed": ok_count,
+        "lessons": results,
+    }
 
 
 @mcp.tool()
@@ -328,7 +450,7 @@ async def get_video_segments(
     Get all timestamped segments for a specific video.
 
     Args:
-        video_id: YouTube video ID (e.g. "dQw4w9WgXcQ") or Bilibili BV ID.
+        video_id: YouTube video ID, Bilibili BV ID, or DeepLearning.AI lesson slug.
                   Use the 'video_id' field from list_videos or search_videos.
 
     Returns:
