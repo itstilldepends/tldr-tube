@@ -452,6 +452,30 @@ def view_history():
     """Render the History view with all videos and collections."""
     st.title("📚 Library")
 
+    # Handle delete video confirmation (at top for visibility)
+    if st.session_state.get("confirm_delete_video_id"):
+        video_id = st.session_state.confirm_delete_video_id
+
+        st.warning("⚠️ Are you sure you want to delete this video? This cannot be undone.")
+        col1, col2, col3 = st.columns([1, 1, 3])
+
+        with col1:
+            if st.button("Cancel", key="cancel_delete"):
+                del st.session_state.confirm_delete_video_id
+                st.rerun()
+
+        with col2:
+            if st.button("Delete", type="primary", key="confirm_delete"):
+                if delete_video(video_id):
+                    del st.session_state.confirm_delete_video_id
+                    st.toast("✅ Video deleted")
+                    st.rerun()
+                else:
+                    st.error("❌ Failed to delete video")
+
+        st.markdown("---")
+        return
+
     # Handle delete collection confirmation (at top for visibility)
     if st.session_state.get("confirm_delete_collection_id"):
         collection_id = st.session_state.confirm_delete_collection_id
@@ -640,26 +664,6 @@ def view_history():
                 del st.session_state.selected_video_id
                 st.rerun()
 
-    # Handle delete confirmation
-    if st.session_state.get("confirm_delete_video_id"):
-        video_id = st.session_state.confirm_delete_video_id
-
-        st.warning("⚠️ Are you sure you want to delete this video? This cannot be undone.")
-        col1, col2, col3 = st.columns([1, 1, 3])
-
-        with col1:
-            if st.button("Cancel", key="cancel_delete"):
-                del st.session_state.confirm_delete_video_id
-                st.rerun()
-
-        with col2:
-            if st.button("Delete", type="primary", key="confirm_delete"):
-                if delete_video(video_id):
-                    st.success("✅ Video deleted")
-                    del st.session_state.confirm_delete_video_id
-                    st.rerun()
-                else:
-                    st.error("❌ Failed to delete video")
 
 
 def view_new_collection():
