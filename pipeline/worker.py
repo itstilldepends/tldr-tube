@@ -153,6 +153,8 @@ def _process_job(job: ProcessingJob) -> None:
     try:
         video = process_video(
             url=job.url,
+            collection_id=job.collection_id,
+            order_index=job.order_index,
             status_callback=status_callback,
             force_asr=job.force_asr,
             whisper_model=job.whisper_model,

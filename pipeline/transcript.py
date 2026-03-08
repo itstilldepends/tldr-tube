@@ -187,6 +187,65 @@ def fetch_bilibili_transcript(url: str) -> Tuple[List[Dict], bool]:
         return transcript, is_auto
 
 
+def fetch_deeplearning_transcript(url: str) -> Tuple[List[Dict], bool]:
+    """
+    Fetch transcript for a DeepLearning.AI lesson.
+
+    Parses the __NEXT_DATA__ JSON embedded in the page HTML to extract captions
+    from the getLessonVideoSubtitle tRPC query.
+
+    Args:
+        url: Full DeepLearning.AI lesson URL
+
+    Returns:
+        Tuple of:
+        - List of transcript entries: [{"start": float, "duration": float, "text": str}, ...]
+        - is_auto_generated: always False (manual captions)
+
+    Raises:
+        NoTranscriptFound: If no captions are found in the page
+    """
+    import requests
+    import json
+
+    resp = requests.get(url, timeout=15)
+    resp.raise_for_status()
+
+    match = re.search(r'<script id="__NEXT_DATA__"[^>]*>(.*?)</script>', resp.text, re.DOTALL)
+    if not match:
+        raise Exception("Could not find __NEXT_DATA__ in page")
+
+    data = json.loads(match.group(1))
+
+    trpc_state = data["props"]["pageProps"]["trpcState"]
+    captions = None
+    for query in trpc_state.get("json", {}).get("queries", []):
+        key = query.get("queryKey", [])
+        # key[0] is a list like ['course', 'getLessonVideoSubtitle']
+        if key and isinstance(key[0], list) and "getLessonVideoSubtitle" in key[0]:
+            captions = query["state"]["data"]["captions"]
+            break
+
+    if not captions:
+        session_data = data["props"]["pageProps"].get("session")
+        if not session_data:
+            raise Exception(
+                "No captions found. This lesson requires a DeepLearning.AI account. "
+                "Please log in and try again."
+            )
+        raise Exception("No captions found for this lesson.")
+
+    transcript = [
+        {
+            "start": float(c["startInSeconds"]),
+            "duration": float(c["endInSeconds"]) - float(c["startInSeconds"]),
+            "text": c["text"],
+        }
+        for c in captions
+    ]
+    return transcript, False
+
+
 def format_transcript_for_llm(transcript: List[Dict]) -> str:
     """
     Format transcript entries into a readable text with timestamps.

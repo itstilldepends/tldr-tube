@@ -12,9 +12,9 @@ from datetime import datetime
 
 from db.session import get_session
 from db.models import Video, Segment
-from pipeline.utils import extract_video_id, extract_bilibili_id, detect_source_type, format_timestamp
-from pipeline.metadata import fetch_video_metadata, download_audio
-from pipeline.transcript import fetch_youtube_transcript, fetch_bilibili_transcript, format_transcript_for_llm
+from pipeline.utils import extract_video_id, extract_bilibili_id, extract_deeplearning_id, detect_source_type, format_timestamp
+from pipeline.metadata import fetch_video_metadata, fetch_deeplearning_metadata, download_audio
+from pipeline.transcript import fetch_youtube_transcript, fetch_bilibili_transcript, fetch_deeplearning_transcript, format_transcript_for_llm
 from pipeline.whisper import transcribe_audio
 from pipeline.summarize import restore_punctuation, summarize_transcript
 from pipeline.embeddings import generate_video_embedding
@@ -77,12 +77,22 @@ def process_video(
     source_type = detect_source_type(url)
     if source_type == "youtube":
         video_id = extract_video_id(url)
-    else:
+    elif source_type == "bilibili":
         video_id = extract_bilibili_id(url)
+    else:
+        video_id = extract_deeplearning_id(url)
 
     with get_session() as session:
         existing = session.query(Video).filter_by(video_id=video_id).first()
         if existing:
+            # If this video was standalone but is now being processed as part of a
+            # collection, move it into the collection rather than leaving it orphaned.
+            if collection_id is not None and existing.collection_id is None:
+                existing.collection_id = collection_id
+                existing.order_index = order_index
+                session.commit()
+                session.refresh(existing)
+            session.expunge(existing)
             update_status("Found in cache, returning existing result", "success")
             return existing
 
@@ -90,7 +100,10 @@ def process_video(
 
     # Step 2: Fetch metadata
     update_status("Fetching video metadata", "running")
-    metadata = fetch_video_metadata(url)
+    if source_type == "deeplearning_ai":
+        metadata = fetch_deeplearning_metadata(url)
+    else:
+        metadata = fetch_video_metadata(url)
     update_status(f"Metadata fetched: {metadata['title']}", "success")
 
     # Step 3: Fetch transcript
@@ -98,11 +111,16 @@ def process_video(
     transcript_source = None
     is_auto_generated = False
 
-    if force_asr:
+    if force_asr and source_type != "deeplearning_ai":
         update_status(f"Using Whisper ASR ({whisper_model} model) as requested", "running")
         transcript, transcript_source, is_auto_generated = _transcribe_with_whisper(
             url, whisper_model, update_status
         )
+    elif source_type == "deeplearning_ai":
+        update_status("Fetching transcript from DeepLearning.AI", "running")
+        transcript, is_auto_generated = fetch_deeplearning_transcript(url)
+        transcript_source = "deeplearning_ai"
+        update_status("Transcript fetched from DeepLearning.AI", "success")
     else:
         update_status(f"Fetching transcript from {source_type}", "running")
         try:

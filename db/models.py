@@ -119,6 +119,10 @@ class ProcessingJob(Base):
     started_at = Column(DateTime, nullable=True)
     completed_at = Column(DateTime, nullable=True)
 
+    # Collection association (for course-level bulk processing)
+    collection_id = Column(Integer, ForeignKey("collections.id"), nullable=True)
+    order_index = Column(Integer, nullable=True)
+
     # Processing config captured at submission time
     force_asr = Column(Boolean, nullable=False, default=False)
     whisper_model = Column(String(20), nullable=False, default="medium")

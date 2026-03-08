@@ -20,8 +20,10 @@ from pipeline.processor import process_video, get_all_videos, delete_video
 from pipeline.worker import start_queue_worker, get_job_progress
 from pipeline.utils import (
     validate_video_url, validate_youtube_url, extract_video_id, extract_bilibili_id,
+    extract_deeplearning_id, extract_deeplearning_course_slug,
     detect_source_type, generate_timestamp_link, format_timestamp
 )
+from pipeline.metadata import fetch_deeplearning_course_lessons
 from pipeline.config import WHISPER_MODELS, CLAUDE_MODELS, LLM_PROVIDERS, check_api_key_configured, get_available_providers
 from pipeline.export import export_video_to_markdown, export_collection_to_markdown
 from pipeline.search import hybrid_search
@@ -37,6 +39,9 @@ st.set_page_config(
     layout="wide",
     initial_sidebar_state="expanded"
 )
+
+_PLATFORM_ICONS = {"bilibili": "🅱️", "deeplearning_ai": "🎓"}
+_PLATFORM_NAMES = {"bilibili": "Bilibili", "deeplearning_ai": "DeepLearning.AI"}
 
 
 def check_password():
@@ -84,7 +89,7 @@ def render_video_result(video: Video):
         video: Video object from database
     """
     # Header with metadata
-    icon = "🅱️" if video.source_type == "bilibili" else "▶️"
+    icon = _PLATFORM_ICONS.get(video.source_type, "▶️")
     st.markdown(f"## {icon} {video.title}")
 
     # Basic metadata row
@@ -233,11 +238,51 @@ def view_new_video():
     """Render the New Video view."""
     st.title("➕ Process New Video")
 
+    # ── DeepLearning.AI course confirmation ───────────────────────────────────
+    if st.session_state.get("_dl_course_pending"):
+        info = st.session_state["_dl_course_pending"]
+        locked = info.get("locked_count", 0)
+        lock_note = f" ({locked} locked — login required)" if locked else ""
+        st.info(
+            f"🎓 Detected DeepLearning.AI course: **{info['course_name']}**  \n"
+            f"Found **{len(info['lessons'])}** accessible video lesson(s){lock_note}. Process all as a Collection?"
+        )
+        with st.expander("View lessons"):
+            for i, lesson in enumerate(info["lessons"]):
+                st.caption(f"{i + 1}. {lesson['title']}")
+
+        col1, col2 = st.columns([1, 5])
+        with col1:
+            if st.button("✅ Create Collection", type="primary"):
+                try:
+                    collection = create_collection(info["course_name"])
+                    for lesson in info["lessons"]:
+                        create_job(
+                            url=lesson["url"],
+                            force_asr=info["force_asr"],
+                            whisper_model=info["whisper_model"],
+                            provider=info["provider"],
+                            model=info["model"],
+                            collection_id=collection.id,
+                            order_index=lesson["order_index"],
+                        )
+                    del st.session_state["_dl_course_pending"]
+                    st.session_state._nav_redirect = "📋 Queue"
+                    st.rerun()
+                except Exception as e:
+                    st.error(f"❌ Failed to create collection: {str(e)}")
+        with col2:
+            if st.button("❌ Cancel"):
+                del st.session_state["_dl_course_pending"]
+                st.rerun()
+        return
+    # ─────────────────────────────────────────────────────────────────────────
+
     # Input
     url = st.text_input(
         "Video URL",
-        placeholder="https://www.youtube.com/watch?v=... or https://www.bilibili.com/video/BV...",
-        help="Enter a YouTube or Bilibili video URL to generate summary"
+        placeholder="https://www.youtube.com/watch?v=... or https://learn.deeplearning.ai/...",
+        help="Enter a YouTube, Bilibili, or DeepLearning.AI URL. Paste a course URL to process all lessons as a Collection."
     )
 
     # Configuration options
@@ -348,13 +393,43 @@ def view_new_video():
     provider_available = check_api_key_configured(selected_provider)
 
     if st.button("Add to Queue", type="primary", disabled=not url or not provider_available):
-        if not validate_video_url(url):
-            st.error("❌ Invalid URL. Supported platforms: YouTube and Bilibili.")
+        if "deeplearning.ai" in url and "learn.deeplearning.ai" not in url:
+            st.error("❌ Please use the learn.deeplearning.ai URL, e.g. https://learn.deeplearning.ai/courses/...")
             return
 
-        # Check if already processed (show cached result immediately)
+        if not validate_video_url(url):
+            st.error("❌ Invalid URL. Supported platforms: YouTube, Bilibili, and DeepLearning.AI.")
+            return
+
         source_type = detect_source_type(url)
-        video_id = extract_video_id(url) if source_type == "youtube" else extract_bilibili_id(url)
+
+        # Course URL → fetch lesson list and ask for confirmation
+        if source_type == "deeplearning_course":
+            with st.spinner("Fetching course info..."):
+                try:
+                    course_name, lessons, locked_count = fetch_deeplearning_course_lessons(url)
+                    st.session_state["_dl_course_pending"] = {
+                        "course_name": course_name,
+                        "lessons": lessons,
+                        "locked_count": locked_count,
+                        "force_asr": force_asr,
+                        "whisper_model": whisper_model,
+                        "provider": selected_provider,
+                        "model": selected_model,
+                    }
+                    st.rerun()
+                except Exception as e:
+                    st.error(f"❌ Failed to fetch course info: {str(e)}")
+            return
+
+        # Single video URL → check cache then enqueue
+        if source_type == "youtube":
+            video_id = extract_video_id(url)
+        elif source_type == "bilibili":
+            video_id = extract_bilibili_id(url)
+        else:
+            video_id = extract_deeplearning_id(url)
+
         with get_session() as session:
             existing = session.query(Video).filter_by(video_id=video_id).first()
 
@@ -518,7 +593,7 @@ def view_history():
         st.markdown("### 🎬 Standalone Videos")
 
         for video in videos:
-            with st.expander(f"{'🅱️' if video.source_type == 'bilibili' else '▶️'} {video.title}", expanded=False):
+            with st.expander(f"{_PLATFORM_ICONS.get(video.source_type, '▶️')} {video.title}", expanded=False):
                 st.caption(f"📺 {video.channel_name}")
                 st.markdown(video.tldr[:200] + "..." if len(video.tldr) > 200 else video.tldr)
 
@@ -793,7 +868,7 @@ def view_ask_ai():
                     # Show individual videos in collection (indented)
                     if collection.videos:
                         for video in sorted(collection.videos, key=lambda v: v.order_index or 0):
-                            icon = "🅱️" if video.source_type == "bilibili" else "▶️"
+                            icon = _PLATFORM_ICONS.get(video.source_type, "▶️")
                             st.caption(f"  └─ {icon} {video.title[:60]}...")
 
             st.markdown("---")
@@ -802,7 +877,7 @@ def view_ask_ai():
         if all_videos:
             st.markdown("### 📹 Standalone Videos")
             for video in all_videos:
-                icon = "🅱️" if video.source_type == "bilibili" else "▶️"
+                icon = _PLATFORM_ICONS.get(video.source_type, "▶️")
                 title = video.title[:78] + ("..." if len(video.title) > 78 else "")
                 video_selected = st.checkbox(
                     f"{icon} {title}",
@@ -909,8 +984,9 @@ def view_ask_ai():
                                 # Switch to History view to show the video
                                 st.rerun()
                         with col2:
-                            platform = "Bilibili" if video.source_type == "bilibili" else "YouTube"
-                            st.markdown(f"[▶️ Watch on {platform}]({video.source_url})")
+                            platform = _PLATFORM_NAMES.get(video.source_type, "YouTube")
+                            watch_icon = _PLATFORM_ICONS.get(video.source_type, "▶️")
+                            st.markdown(f"[{watch_icon} Watch on {platform}]({video.source_url})")
 
                 # Show context for debugging (optional)
                 with st.expander("🔍 Debug: View Retrieved Context", expanded=False):
@@ -935,7 +1011,7 @@ def view_queue():
             return
 
         for job in jobs:
-            icon = "🅱️" if "bilibili" in job.url else "▶️"
+            icon = "🅱️" if "bilibili" in job.url else "🎓" if "deeplearning.ai" in job.url else "▶️"
             with st.container(border=True):
                 col1, col2 = st.columns([5, 1])
                 with col1:

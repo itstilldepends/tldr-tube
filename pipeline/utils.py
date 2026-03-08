@@ -4,8 +4,9 @@ Utility functions for the pipeline.
 Functions:
 - extract_video_id: Extract YouTube video ID from URL
 - extract_bilibili_id: Extract Bilibili BV ID from URL
-- detect_source_type: Detect whether a URL is YouTube or Bilibili
-- validate_video_url: Validate YouTube or Bilibili URLs
+- extract_deeplearning_id: Extract lesson ID from DeepLearning.AI URL
+- detect_source_type: Detect whether a URL is YouTube, Bilibili, or DeepLearning.AI
+- validate_video_url: Validate YouTube, Bilibili, or DeepLearning.AI URLs
 - generate_timestamp_link: Generate platform-specific timestamp link
 - format_timestamp: Convert seconds to MM:SS or HH:MM:SS format
 - hash_video_id: Generate unique ID for local/S3 videos
@@ -138,6 +139,51 @@ def extract_bilibili_id(url: str) -> str:
     raise ValueError(f"Could not extract Bilibili video ID from URL: {url}")
 
 
+def extract_deeplearning_id(url: str) -> str:
+    """
+    Extract lesson ID from a DeepLearning.AI lesson URL.
+
+    Supports:
+    - https://learn.deeplearning.ai/courses/build-and-train-an-llm-with-jax/lesson/9i8oms/final-minigpt
+
+    Args:
+        url: DeepLearning.AI lesson URL (must contain /lesson/)
+
+    Returns:
+        Lesson ID string (e.g. "9i8oms")
+
+    Raises:
+        ValueError: If URL is invalid or lesson ID cannot be extracted
+    """
+    match = re.search(r"/lesson/([a-zA-Z0-9]+)", url)
+    if match:
+        return match.group(1)
+    raise ValueError(f"Could not extract lesson ID from: {url}")
+
+
+def extract_deeplearning_course_slug(url: str) -> str:
+    """
+    Extract course slug from a DeepLearning.AI course URL.
+
+    Supports:
+    - https://learn.deeplearning.ai/courses/agent-skills-with-anthropic
+    - https://learn.deeplearning.ai/courses/agent-skills-with-anthropic/
+
+    Args:
+        url: DeepLearning.AI course URL
+
+    Returns:
+        Course slug string (e.g. "agent-skills-with-anthropic")
+
+    Raises:
+        ValueError: If URL is invalid or course slug cannot be extracted
+    """
+    match = re.search(r"learn\.deeplearning\.ai/courses/([a-zA-Z0-9-]+)", url)
+    if match:
+        return match.group(1)
+    raise ValueError(f"Could not extract course slug from: {url}")
+
+
 def detect_source_type(url: str) -> str:
     """
     Detect the video platform from a URL.
@@ -146,7 +192,8 @@ def detect_source_type(url: str) -> str:
         url: Video URL string
 
     Returns:
-        "youtube" or "bilibili"
+        "youtube", "bilibili", "deeplearning_ai" (single lesson), or
+        "deeplearning_course" (full course, multiple lessons)
 
     Raises:
         ValueError: If the URL is not from a supported platform
@@ -155,12 +202,17 @@ def detect_source_type(url: str) -> str:
         return "youtube"
     if "bilibili.com" in url or "b23.tv" in url:
         return "bilibili"
+    if "learn.deeplearning.ai" in url:
+        return "deeplearning_ai" if "/lesson/" in url else "deeplearning_course"
     raise ValueError(f"Unsupported video platform: {url}")
 
 
 def validate_video_url(url: str) -> bool:
     """
-    Check if a URL is a valid YouTube or Bilibili URL.
+    Check if a URL is a valid YouTube, Bilibili, or DeepLearning.AI URL.
+
+    Accepts both individual lesson URLs (deeplearning_ai) and full course
+    URLs (deeplearning_course).
 
     Args:
         url: URL string to validate
@@ -174,6 +226,10 @@ def validate_video_url(url: str) -> bool:
             extract_video_id(url)
         elif source_type == "bilibili":
             extract_bilibili_id(url)
+        elif source_type == "deeplearning_ai":
+            extract_deeplearning_id(url)
+        elif source_type == "deeplearning_course":
+            extract_deeplearning_course_slug(url)
         return True
     except ValueError:
         return False
@@ -196,6 +252,8 @@ def generate_timestamp_link(source_url: str, source_type: str, seconds: int) -> 
     elif source_type == "bilibili":
         base_url = source_url.split("?")[0]
         return f"{base_url}?t={seconds}"
+    elif source_type == "deeplearning_ai":
+        return source_url  # no timestamp URL params supported
     return source_url
 
 

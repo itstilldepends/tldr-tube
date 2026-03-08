@@ -46,7 +46,19 @@ def init_db():
     Only creates tables that don't already exist.
     """
     Base.metadata.create_all(engine)
+    _migrate_processing_jobs()
     print(f"✅ Database initialized at: {DATABASE_URL}")
+
+
+def _migrate_processing_jobs():
+    """Add collection_id / order_index columns to processing_jobs if missing."""
+    with engine.connect() as conn:
+        for col, typedef in [("collection_id", "INTEGER"), ("order_index", "INTEGER")]:
+            try:
+                conn.execute(text(f"ALTER TABLE processing_jobs ADD COLUMN {col} {typedef}"))
+                conn.commit()
+            except Exception:
+                pass  # Column already exists
 
 
 def get_session():

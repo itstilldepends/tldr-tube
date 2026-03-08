@@ -235,16 +235,20 @@ def create_job(
     whisper_model: str = "medium",
     provider: Optional[str] = None,
     model: Optional[str] = None,
+    collection_id: Optional[int] = None,
+    order_index: Optional[int] = None,
 ) -> ProcessingJob:
     """
     Create a new pending processing job and add it to the queue.
 
     Args:
-        url: YouTube or Bilibili video URL
+        url: YouTube, Bilibili, or DeepLearning.AI video URL
         force_asr: Skip platform captions and use Whisper
         whisper_model: Whisper model size
         provider: LLM provider name
         model: LLM model name
+        collection_id: Optional collection this job belongs to
+        order_index: Optional position within the collection
 
     Returns:
         Created ProcessingJob object
@@ -261,6 +265,8 @@ def create_job(
             whisper_model=whisper_model,
             provider=provider,
             model=model,
+            collection_id=collection_id,
+            order_index=order_index,
         )
         session.add(job)
         session.commit()
