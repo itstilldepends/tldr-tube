@@ -168,19 +168,24 @@ Last updated: 2026-02-19
 ---
 
 #### 4. Keyframe Extraction
-**Status**: Not started (user requested to postpone)
-**Goal**: Extract key screenshots for tutorial videos
+**Status**: Designed, not yet implemented
+**Goal**: Extract key screenshots from local lecture videos and generate structured notes
+**Design doc**: `KEYFRAME_EXTRACTION.md`
 
-**When to implement**: User will request when needed
+**Input**: Local video file + subtitle file (SRT/VTT/Whisper JSON)
+**Output**: Structured notes with timestamp, screenshot, slide content, explanation per keyframe
 
-**Planned approach**:
-- Only for `video_type == "tutorial"`
-- Extract frames at segment boundaries
-- Store in `data/keyframes/{video_id}/frame_{timestamp}.jpg`
-- Add `Keyframe` model to database
-- Display thumbnails in UI next to segment summaries
+**Pipeline summary** (see design doc for full details):
+1. ffmpeg 1fps frame extraction
+2. pHash coarse filter (drop near-identical frames)
+3. SSIM fine filter (drop minor-change frames)
+4. Debounce (keep settled state after animations)
+5. Global dedup (merge revisited slides)
+6. Subtitle alignment (window-based text association)
+7. Multimodal LLM slide understanding (batched, cheap model)
+8. LLM note generation (single-pass synthesis)
 
-**Estimate**: ~5-6 hours
+**Estimate**: ~5-8 hours including calibration
 
 ---
 
