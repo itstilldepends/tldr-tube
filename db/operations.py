@@ -321,6 +321,29 @@ def get_all_jobs(limit: int = 50) -> List[ProcessingJob]:
     return jobs
 
 
+def delete_job(job_id: int) -> bool:
+    """Delete a single processing job by ID."""
+    with get_session() as session:
+        job = session.query(ProcessingJob).filter_by(id=job_id).first()
+        if not job:
+            return False
+        session.delete(job)
+        session.commit()
+    return True
+
+
+def clear_finished_jobs() -> int:
+    """Delete all completed and failed jobs. Returns count deleted."""
+    with get_session() as session:
+        count = (
+            session.query(ProcessingJob)
+            .filter(ProcessingJob.status.in_(["completed", "failed"]))
+            .delete(synchronize_session="fetch")
+        )
+        session.commit()
+    return count
+
+
 def get_job(job_id: int) -> Optional[ProcessingJob]:
     """
     Get a single processing job by ID.

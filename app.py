@@ -14,7 +14,7 @@ from db.models import Video, Segment, Collection, Keyframe, Note, ProcessingJob
 from db.operations import (
     create_collection, add_video_to_collection, remove_video_from_collection,
     move_video_in_collection, delete_collection, get_all_collections,
-    create_job, create_notes_job, get_all_jobs,
+    create_job, create_notes_job, get_all_jobs, delete_job, clear_finished_jobs,
 )
 from pipeline.processor import process_video, get_all_videos, delete_video
 from pipeline.worker import start_queue_worker, get_job_progress
@@ -1098,6 +1098,15 @@ def view_queue():
     st.title("📋 Processing Queue")
     st.caption("Videos are processed one at a time in the background. Close the tab and come back — jobs keep running.")
 
+    # Clear finished jobs button
+    if st.button("🧹 Clear Finished Jobs"):
+        count = clear_finished_jobs()
+        if count:
+            st.toast(f"Cleared {count} finished job(s)")
+        else:
+            st.toast("No finished jobs to clear")
+        st.rerun()
+
     @st.fragment(run_every=2)
     def _queue_live_panel():
         jobs = get_all_jobs(limit=50)
@@ -1134,28 +1143,40 @@ def view_queue():
 
                 elif job.status == "completed":
                     st.success(job.current_step or "✅ Done")
-                    if job.result_video_id:
-                        btn_label = "📝 View Notes" if job.job_type == "generate_notes" else "📄 View Summary"
-                        if st.button(btn_label, key=f"view_job_{job.id}"):
-                            st.session_state.selected_video_id = job.result_video_id
-                            st.session_state._nav_redirect = "📚 Library"
+                    col_a, col_b = st.columns([4, 1])
+                    with col_a:
+                        if job.result_video_id:
+                            btn_label = "📝 View Notes" if job.job_type == "generate_notes" else "📄 View Summary"
+                            if st.button(btn_label, key=f"view_job_{job.id}"):
+                                st.session_state.selected_video_id = job.result_video_id
+                                st.session_state._nav_redirect = "📚 Library"
+                                st.rerun()
+                    with col_b:
+                        if st.button("🗑️", key=f"del_job_{job.id}"):
+                            delete_job(job.id)
                             st.rerun()
 
                 elif job.status == "failed":
                     st.error(f"❌ {job.error_message or 'Unknown error'}")
-                    if job.job_type == "generate_notes":
-                        if st.button("🔄 Retry", key=f"retry_job_{job.id}"):
-                            create_notes_job(job.target_video_id)
-                            st.rerun()
-                    else:
-                        if st.button("🔄 Retry", key=f"retry_job_{job.id}"):
-                            create_job(
-                                url=job.url,
-                                force_asr=job.force_asr,
-                                whisper_model=job.whisper_model,
-                                provider=job.provider,
-                                model=job.model,
-                            )
+                    col_a, col_b = st.columns([4, 1])
+                    with col_a:
+                        if job.job_type == "generate_notes":
+                            if st.button("🔄 Retry", key=f"retry_job_{job.id}"):
+                                create_notes_job(job.target_video_id)
+                                st.rerun()
+                        else:
+                            if st.button("🔄 Retry", key=f"retry_job_{job.id}"):
+                                create_job(
+                                    url=job.url,
+                                    force_asr=job.force_asr,
+                                    whisper_model=job.whisper_model,
+                                    provider=job.provider,
+                                    model=job.model,
+                                )
+                                st.rerun()
+                    with col_b:
+                        if st.button("🗑️", key=f"del_job_{job.id}"):
+                            delete_job(job.id)
                             st.rerun()
 
     _queue_live_panel()
