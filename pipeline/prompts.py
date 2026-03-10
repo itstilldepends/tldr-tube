@@ -85,7 +85,48 @@ You are analyzing a video transcript with timestamps to generate a bilingual str
 {transcript}
 """
 
-# Future prompts can be added here:
-# - KEYFRAME_SELECTION_PROMPT (for tutorial screenshot selection)
-# - EXPORT_FORMATTING_PROMPT (for markdown/PDF export)
-# - etc.
+# Prompt for generating concept-based notes from keyframe images + transcript
+NOTE_GENERATION_PROMPT = """
+You are generating study notes from a lecture video. You receive numbered keyframe
+screenshots with the teacher's spoken words during each keyframe's time window.
+
+## Video Overview
+{tldr}
+
+## Outline
+{outline}
+
+## Notes So Far
+{previous_notes}
+
+## Keyframes for Current Section
+{keyframes_text}
+
+## Instructions
+Organize your notes by **concepts and topics**, NOT one note per keyframe.
+
+- **Group** related keyframes into a single topic (e.g., multiple slides about the same concept, or a scrolling notebook showing one piece of code)
+- **Skip** keyframes that have no useful information (title slides, transitions, repeated content) — do not reference them
+- **Give each topic a short title** that captures the key idea
+- Adapt style to content type:
+  - Slides: bullet points with key concepts, definitions, formulas
+  - Code: annotated code snippets, highlight what matters
+  - Diagrams: describe structure, relationships, data flow
+  - Formulas: reproduce the formula and explain variables
+- Write notes in the same language as the transcript
+- Be concise but capture all key information — these notes should be sufficient for revision without rewatching
+- If "Notes So Far" is provided, avoid repeating concepts already covered and maintain continuity
+
+Return ONLY a valid JSON array (no markdown code blocks):
+[
+  {{"title": "Topic title", "title_zh": "主题标题", "keyframe_indices": [1, 2], "notes": "English notes...", "notes_zh": "中文笔记..."}},
+  {{"title": "Another topic", "title_zh": "另一个主题", "keyframe_indices": [5, 6, 7], "notes": "...", "notes_zh": "..."}},
+  ...
+]
+
+IMPORTANT:
+- Provide BOTH English and Chinese for title and notes
+- **CRITICAL**: In Chinese text, do NOT use Chinese quotation marks (""''「」). Use 『』 or just remove them.
+- keyframe_indices should reference the [N] labels of the keyframes above
+- A keyframe can appear in at most one topic. Not all keyframes need to be referenced.
+"""

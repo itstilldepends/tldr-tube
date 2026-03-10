@@ -39,6 +39,32 @@ class LLMClient(ABC):
         """
         pass
 
+    def generate_with_images(
+        self,
+        text: str,
+        image_paths: list[str],
+        max_tokens: int = 4096,
+        temperature: float = 0.7,
+        model: Optional[str] = None
+    ) -> str:
+        """
+        Generate text from a prompt that includes images.
+
+        Args:
+            text: The text prompt
+            image_paths: List of local image file paths to include
+            max_tokens: Maximum tokens to generate
+            temperature: Sampling temperature (0-1)
+            model: Model ID to use (provider-specific)
+
+        Returns:
+            Generated text
+
+        Raises:
+            NotImplementedError: If provider doesn't support multimodal
+        """
+        raise NotImplementedError(f"{self.__class__.__name__} does not support multimodal generation")
+
 
 class ClaudeLLMClient(LLMClient):
     """Anthropic Claude API client."""
@@ -71,6 +97,39 @@ class ClaudeLLMClient(LLMClient):
             max_tokens=max_tokens,
             temperature=temperature,
             messages=[{"role": "user", "content": prompt}]
+        )
+        return response.content[0].text
+
+    def generate_with_images(
+        self,
+        text: str,
+        image_paths: list[str],
+        max_tokens: int = 4096,
+        temperature: float = 0.7,
+        model: str = "claude-sonnet-4-5-20250929"
+    ) -> str:
+        """Generate text using Claude API with image inputs."""
+        import base64
+
+        content = []
+        for path in image_paths:
+            with open(path, "rb") as f:
+                img_data = base64.standard_b64encode(f.read()).decode("utf-8")
+            content.append({
+                "type": "image",
+                "source": {
+                    "type": "base64",
+                    "media_type": "image/jpeg",
+                    "data": img_data,
+                }
+            })
+        content.append({"type": "text", "text": text})
+
+        response = self.client.messages.create(
+            model=model,
+            max_tokens=max_tokens,
+            temperature=temperature,
+            messages=[{"role": "user", "content": content}]
         )
         return response.content[0].text
 

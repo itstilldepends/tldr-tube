@@ -10,11 +10,11 @@ import streamlit as st
 from dotenv import load_dotenv
 
 from db.session import init_db, get_session
-from db.models import Video, Segment, Collection
+from db.models import Video, Segment, Collection, Keyframe, Note, ProcessingJob
 from db.operations import (
     create_collection, add_video_to_collection, remove_video_from_collection,
     move_video_in_collection, delete_collection, get_all_collections,
-    create_job, get_all_jobs,
+    create_job, create_notes_job, get_all_jobs,
 )
 from pipeline.processor import process_video, get_all_videos, delete_video
 from pipeline.worker import start_queue_worker, get_job_progress
@@ -79,6 +79,43 @@ def check_password():
     st.caption("Set APP_PASSWORD in .env to enable password protection, or leave it unset to skip this screen.")
 
     return False
+
+
+def _render_notes_section(video: Video):
+    """Render the notes display section if notes exist."""
+    with get_session() as session:
+        notes = session.query(Note).filter_by(video_id=video.id).order_by(Note.order_index).all()
+        if not notes:
+            return
+
+        # Load all keyframes for this video into a lookup
+        all_kfs = {kf.id: kf for kf in session.query(Keyframe).filter_by(video_id=video.id).all()}
+
+        st.markdown("---")
+        st.markdown("### 📝 Study Notes")
+        st.caption(f"{len(notes)} topics | {sum(len(json.loads(n.keyframe_ids)) for n in notes)} keyframes referenced")
+
+        tab_en, tab_zh = st.tabs(["🇬🇧 English", "🇨🇳 中文"])
+
+        for tab, lang in [(tab_en, "en"), (tab_zh, "zh")]:
+            with tab:
+                for note in notes:
+                    title = note.title if lang == "en" else (note.title_zh or note.title)
+                    content = note.notes if lang == "en" else (note.notes_zh or note.notes)
+
+                    kf_ids = json.loads(note.keyframe_ids)
+                    kf_objects = [all_kfs[kid] for kid in kf_ids if kid in all_kfs]
+
+                    with st.expander(f"**{title}**", expanded=True):
+                        # Keyframe gallery (small thumbnails, click to enlarge)
+                        if kf_objects:
+                            for kf in kf_objects:
+                                if os.path.exists(kf.frame_path):
+                                    with st.popover(f"🔍 {kf.timestamp_str}"):
+                                        st.image(kf.frame_path, use_container_width=True)
+                                    st.image(kf.frame_path, width=640)
+
+                        st.markdown(content)
 
 
 def render_video_result(video: Video):
@@ -186,6 +223,58 @@ def render_video_result(video: Video):
     with col3:
         st.caption("💡 Markdown files can be opened in Notion, Obsidian, or any text editor")
 
+    # Generate Notes section
+    if video.source_type in ("youtube", "deeplearning_ai"):
+        st.markdown("---")
+        st.markdown("### 📝 Generate Study Notes")
+
+        # Check if notes already exist or a job is in progress
+        with get_session() as session:
+            has_notes = session.query(Note).filter_by(video_id=video.id).count() > 0
+            pending_job = (
+                session.query(ProcessingJob)
+                .filter_by(target_video_id=video.id, job_type="generate_notes")
+                .filter(ProcessingJob.status.in_(["pending", "processing"]))
+                .first()
+            )
+
+        if pending_job:
+            st.info("⏳ Note generation in progress — check the Queue tab for status.")
+        else:
+            note_col1, note_col2 = st.columns([1, 3])
+            with note_col1:
+                btn_label = "🔄 Regenerate Notes" if has_notes else "📝 Generate Notes"
+                generate_clicked = st.button(btn_label, key=f"gen_notes_{video.id}")
+            with note_col2:
+                if has_notes:
+                    st.caption("✅ Notes available — scroll down to view")
+                else:
+                    st.caption("Extract keyframes and generate concept-based study notes")
+
+            if generate_clicked:
+                if has_notes:
+                    st.session_state[f"_confirm_regen_{video.id}"] = True
+                    st.rerun()
+                else:
+                    create_notes_job(video.id)
+                    st.session_state._nav_redirect = "📋 Queue"
+                    st.rerun()
+
+            # Regeneration confirmation
+            if st.session_state.get(f"_confirm_regen_{video.id}"):
+                st.warning("Existing notes will be replaced. Continue?")
+                c1, c2 = st.columns(2)
+                with c1:
+                    if st.button("Cancel", key=f"cancel_regen_{video.id}"):
+                        del st.session_state[f"_confirm_regen_{video.id}"]
+                        st.rerun()
+                with c2:
+                    if st.button("Regenerate", type="primary", key=f"confirm_regen_{video.id}"):
+                        del st.session_state[f"_confirm_regen_{video.id}"]
+                        create_notes_job(video.id)
+                        st.session_state._nav_redirect = "📋 Queue"
+                        st.rerun()
+
     st.markdown("---")
 
     # Language tabs
@@ -232,6 +321,9 @@ def render_video_result(video: Video):
                 with col2:
                     st.markdown(segment.summary_zh)
                 st.markdown("")
+
+    # Notes display (after timeline)
+    _render_notes_section(video)
 
 
 def view_new_video():
@@ -1016,10 +1108,13 @@ def view_queue():
 
         for job in jobs:
             icon = "🅱️" if "bilibili" in job.url else "🎓" if "deeplearning.ai" in job.url else "▶️"
+            job_label = f"{icon} {job.url}"
+            if job.job_type == "generate_notes":
+                job_label = f"📝 Generate Notes — {job.url}"
             with st.container(border=True):
                 col1, col2 = st.columns([5, 1])
                 with col1:
-                    st.markdown(f"**{icon} {job.url}**")
+                    st.markdown(f"**{job_label}**")
                 with col2:
                     st.caption(job.created_at.strftime("%H:%M:%S"))
 
@@ -1038,24 +1133,30 @@ def view_queue():
                         st.caption("⏳ Processing...")
 
                 elif job.status == "completed":
-                    st.success("✅ Done")
+                    st.success(job.current_step or "✅ Done")
                     if job.result_video_id:
-                        if st.button("📄 View Summary", key=f"view_job_{job.id}"):
+                        btn_label = "📝 View Notes" if job.job_type == "generate_notes" else "📄 View Summary"
+                        if st.button(btn_label, key=f"view_job_{job.id}"):
                             st.session_state.selected_video_id = job.result_video_id
                             st.session_state._nav_redirect = "📚 Library"
                             st.rerun()
 
                 elif job.status == "failed":
                     st.error(f"❌ {job.error_message or 'Unknown error'}")
-                    if st.button("🔄 Retry", key=f"retry_job_{job.id}"):
-                        create_job(
-                            url=job.url,
-                            force_asr=job.force_asr,
-                            whisper_model=job.whisper_model,
-                            provider=job.provider,
-                            model=job.model,
-                        )
-                        st.rerun()
+                    if job.job_type == "generate_notes":
+                        if st.button("🔄 Retry", key=f"retry_job_{job.id}"):
+                            create_notes_job(job.target_video_id)
+                            st.rerun()
+                    else:
+                        if st.button("🔄 Retry", key=f"retry_job_{job.id}"):
+                            create_job(
+                                url=job.url,
+                                force_asr=job.force_asr,
+                                whisper_model=job.whisper_model,
+                                provider=job.provider,
+                                model=job.model,
+                            )
+                            st.rerun()
 
     _queue_live_panel()
 

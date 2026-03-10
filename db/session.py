@@ -51,9 +51,15 @@ def init_db():
 
 
 def _migrate_processing_jobs():
-    """Add collection_id / order_index columns to processing_jobs if missing."""
+    """Add missing columns to processing_jobs table."""
     with engine.connect() as conn:
-        for col, typedef in [("collection_id", "INTEGER"), ("order_index", "INTEGER")]:
+        migrations = [
+            ("collection_id", "INTEGER"),
+            ("order_index", "INTEGER"),
+            ("job_type", "VARCHAR(50) DEFAULT 'process_video'"),
+            ("target_video_id", "INTEGER"),
+        ]
+        for col, typedef in migrations:
             try:
                 conn.execute(text(f"ALTER TABLE processing_jobs ADD COLUMN {col} {typedef}"))
                 conn.commit()

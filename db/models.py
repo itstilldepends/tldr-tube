@@ -76,6 +76,8 @@ class Video(Base):
     # Relationships
     collection = relationship("Collection", back_populates="videos")
     segments = relationship("Segment", back_populates="video", cascade="all, delete-orphan")
+    keyframes = relationship("Keyframe", back_populates="video", cascade="all, delete-orphan")
+    notes_list = relationship("Note", back_populates="video", cascade="all, delete-orphan")
 
     def __repr__(self):
         return f"<Video(id={self.id}, video_id='{self.video_id}', title='{self.title[:30]}...')>"
@@ -105,12 +107,60 @@ class Segment(Base):
         return f"<Segment(id={self.id}, timestamp='{self.timestamp}', video_id={self.video_id})>"
 
 
+class Keyframe(Base):
+    """Individual extracted keyframe image from a video."""
+
+    __tablename__ = "keyframes"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    video_id = Column(Integer, ForeignKey("videos.id"), nullable=False, index=True)
+
+    timestamp_seconds = Column(Float, nullable=False)
+    timestamp_str = Column(String(20), nullable=False)  # "MM:SS"
+    frame_path = Column(String(500), nullable=False)     # relative: data/keyframes/{video_id}/frame_{t}.jpg
+    sharpness = Column(Float, nullable=False)            # Laplacian variance score
+    is_visual = Column(Boolean, nullable=False)          # True = slide/code, False = talking head
+
+    # Relationships
+    video = relationship("Video", back_populates="keyframes")
+
+    def __repr__(self):
+        return f"<Keyframe(id={self.id}, timestamp='{self.timestamp_str}', visual={self.is_visual})>"
+
+
+class Note(Base):
+    """Concept-based note entry referencing one or more keyframes."""
+
+    __tablename__ = "notes"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    video_id = Column(Integer, ForeignKey("videos.id"), nullable=False, index=True)
+    order_index = Column(Integer, nullable=False)  # Display order
+
+    # Content (bilingual)
+    title = Column(String(500), nullable=False)     # English title
+    title_zh = Column(String(500), nullable=True)   # Chinese title
+    notes = Column(Text, nullable=False)            # English notes
+    notes_zh = Column(Text, nullable=True)          # Chinese notes
+
+    # Keyframe references (JSON array of Keyframe.id)
+    keyframe_ids = Column(Text, nullable=False)     # e.g. "[1, 3, 5]"
+
+    # Relationships
+    video = relationship("Video", back_populates="notes_list")
+
+    def __repr__(self):
+        return f"<Note(id={self.id}, title='{self.title[:30]}...', video_id={self.video_id})>"
+
+
 class ProcessingJob(Base):
     """A queued video processing job, processed by the background worker."""
 
     __tablename__ = "processing_jobs"
 
     id = Column(Integer, primary_key=True, autoincrement=True)
+    job_type = Column(String(50), nullable=False, default="process_video")
+    # "process_video" | "generate_notes"
     url = Column(String(1000), nullable=False)
     status = Column(String(20), nullable=False, default="pending", index=True)
     # "pending" | "processing" | "completed" | "failed"
@@ -129,12 +179,15 @@ class ProcessingJob(Base):
     provider = Column(String(50), nullable=True)
     model = Column(String(100), nullable=True)
 
+    # For generate_notes jobs: the video to generate notes for
+    target_video_id = Column(Integer, ForeignKey("videos.id"), nullable=True)
+
     # Progress & results
     current_step = Column(String(500), nullable=True)   # last step persisted to DB
     error_message = Column(Text, nullable=True)
     result_video_id = Column(Integer, ForeignKey("videos.id"), nullable=True)
 
-    result_video = relationship("Video")
+    result_video = relationship("Video", foreign_keys=[result_video_id])
 
     def __repr__(self):
         return f"<ProcessingJob(id={self.id}, status='{self.status}', url='{self.url[:40]}...')>"

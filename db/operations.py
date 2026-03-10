@@ -8,7 +8,7 @@ from typing import List, Optional
 from sqlalchemy.orm import Session, joinedload
 
 from db.session import get_session
-from db.models import Collection, Video, ProcessingJob
+from db.models import Collection, Video, Keyframe, Note, ProcessingJob
 
 
 def create_collection(title: str, description: Optional[str] = None) -> Collection:
@@ -267,6 +267,25 @@ def create_job(
             model=model,
             collection_id=collection_id,
             order_index=order_index,
+        )
+        session.add(job)
+        session.commit()
+        session.refresh(job)
+        session.expunge(job)
+    return job
+
+
+def create_notes_job(video_id: int) -> ProcessingJob:
+    """Create a job to generate keyframe notes for an existing video."""
+    with get_session() as session:
+        video = session.query(Video).filter_by(id=video_id).first()
+        if not video:
+            raise ValueError(f"Video id={video_id} not found")
+
+        job = ProcessingJob(
+            job_type="generate_notes",
+            url=video.source_url,
+            target_video_id=video.id,
         )
         session.add(job)
         session.commit()
