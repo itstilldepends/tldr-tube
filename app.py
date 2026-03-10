@@ -1077,8 +1077,7 @@ def view_ask_ai():
                         with col1:
                             if st.button(f"📄 View Full Summary", key=f"view_rag_{video.id}"):
                                 st.session_state.selected_video_id = video.id
-                                st.session_state.return_to_ask_ai = True
-                                # Switch to History view to show the video
+                                st.session_state._nav_redirect = "📚 Library"
                                 st.rerun()
                         with col2:
                             platform = _PLATFORM_NAMES.get(video.source_type, "YouTube")
