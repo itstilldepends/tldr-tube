@@ -111,9 +111,7 @@ def _render_notes_section(video: Video):
                         if kf_objects:
                             for kf in kf_objects:
                                 if os.path.exists(kf.frame_path):
-                                    with st.popover(f"🔍 {kf.timestamp_str}"):
-                                        st.image(kf.frame_path, use_container_width=True)
-                                    st.image(kf.frame_path, width=640)
+                                    st.image(kf.frame_path, caption=kf.timestamp_str, width=640)
 
                         st.markdown(content)
 

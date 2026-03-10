@@ -131,7 +131,9 @@ def _extract_frames(video_url: str, output_dir: str, status_callback: Optional[C
     if status_callback:
         status_callback("Extracting frames at 1fps...")
     start = time.time()
-    subprocess.run(cmd, check=True)
+    result = subprocess.run(cmd, capture_output=True, text=True)
+    if result.returncode != 0:
+        raise RuntimeError(f"ffmpeg frame extraction failed (exit {result.returncode}): {result.stderr[:500]}")
     elapsed = time.time() - start
 
     frames = sorted(
@@ -288,7 +290,10 @@ def _sample_sharp_replacement(
         os.path.join(tmp_dir, "s_%03d.jpg"),
         "-y", "-loglevel", "warning"
     ]
-    subprocess.run(cmd, check=True)
+    result = subprocess.run(cmd, capture_output=True, text=True)
+    if result.returncode != 0:
+        logger.warning(f"Blur replacement sampling failed: {result.stderr[:200]}")
+        return None, -1.0
 
     best_path = None
     best_score = -1.0

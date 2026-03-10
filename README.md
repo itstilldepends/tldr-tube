@@ -31,6 +31,12 @@ Save time taking notes on YouTube and Bilibili videos with AI-powered, timestamp
 - Keyword search across all summaries, titles, and descriptions
 - Ask questions about your video library using RAG
 
+✅ **Keyframe Study Notes**
+- Generate concept-based study notes from lecture videos
+- CV pipeline extracts keyframes (pHash + SSIM filtering, blur replacement, talking head detection)
+- Multimodal LLM organizes notes by topics, not by individual frames
+- Bilingual output (English + 中文), queue-based processing
+
 ✅ **Export**
 - Download summaries as Markdown (English or Chinese)
 - Perfect for Notion, Obsidian, or any note-taking app
@@ -50,6 +56,7 @@ Save time taking notes on YouTube and Bilibili videos with AI-powered, timestamp
 - **youtube-transcript-api** - Fetch YouTube captions
 - **mlx-whisper** - Apple Silicon-optimized speech-to-text
 - **yt-dlp** - Video metadata, audio download, and Bilibili subtitles
+- **OpenCV + imagehash + scikit-image** - Keyframe extraction pipeline
 - **Multiple LLM providers** - Claude, Gemini, OpenAI, DeepSeek, Qwen
 - **SQLAlchemy + SQLite** - Database (Postgres-ready)
 - **MCP** - Model Context Protocol server for agent integration
@@ -145,6 +152,13 @@ Then select **Ollama (Local)** as the provider in the app. No `.env` changes nee
 2. Give the collection a title (e.g., "MIT 6.006 Lectures")
 3. Paste multiple URLs (one per line)
 4. Click **Process All** — videos are processed sequentially with progress updates
+
+### Generate Study Notes
+
+1. Open a processed video from the **Library**
+2. Scroll to **Generate Study Notes** and click **📝 Generate Notes**
+3. The job runs in the background — check **📋 Queue** for progress
+4. Notes appear at the bottom of the video detail page with keyframe images
 
 ### Search
 
@@ -246,9 +260,9 @@ tldr-tube/
 ├── pyproject.toml          # Package config & entry point (tldr-tube-mcp)
 ├── run.sh                  # Streamlit startup script (setup + launch)
 ├── db/
-│   ├── models.py           # SQLAlchemy models (Collection, Video, Segment)
+│   ├── models.py           # SQLAlchemy models (Collection, Video, Segment, Keyframe, Note)
 │   ├── session.py          # Database engine & session
-│   └── operations.py       # Collection CRUD operations
+│   └── operations.py       # Collection/Job CRUD operations
 ├── pipeline/
 │   ├── processor.py        # Main pipeline orchestrator
 │   ├── transcript.py       # YouTube & Bilibili transcript fetching
@@ -261,7 +275,10 @@ tldr-tube/
 │   ├── search.py           # Keyword search
 │   ├── rag.py              # Ask AI (retrieval-augmented generation)
 │   ├── embeddings.py       # Semantic search embeddings (BGE-M3)
+│   ├── keyframes.py        # Keyframe extraction (CV pipeline)
+│   ├── keyframe_notes.py   # Concept-based note generation
 │   ├── llm_client.py       # Unified LLM client (multi-provider)
+│   ├── worker.py           # Background queue worker
 │   └── config.py           # Provider configuration
 ├── data/                   # SQLite database (gitignored)
 ├── requirements.txt
@@ -298,6 +315,7 @@ Approximate cost per 1-hour video:
 - [x] Ask AI (RAG over your video library)
 - [x] Multi-LLM provider support
 - [x] MCP server for AI agent integration
+- [x] Keyframe study notes (concept-based, bilingual)
 
 ### Planned
 - [ ] Local file upload (MP4/MOV)

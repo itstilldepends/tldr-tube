@@ -285,12 +285,13 @@ ffmpeg                 # frame extraction (CLI)
    - Previous notes context passed to each batch for continuity
    - Tested end-to-end, produces quality bilingual notes
 
-3. **`db/models.py`** — Add `Keyframe` + `Note` models
+3. ✅ **`db/models.py`** — `Keyframe` + `Note` models, `ProcessingJob.job_type` for queue
 
-4. **`app.py`** — UI integration
-   - "Generate Notes" button in video detail view
-   - Progress indicator (extracting → filtering → generating)
-   - Notes display with keyframe thumbnails + bilingual content
+4. ✅ **`app.py`** — UI integration
+   - "Generate Notes" button (queue-based, non-blocking)
+   - Regenerate confirmation dialog
+   - Notes display with keyframe images + bilingual tabs
+   - Progress visible in Queue view
 
 ### Test scripts
 

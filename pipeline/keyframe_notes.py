@@ -149,7 +149,10 @@ def _parse_notes_response(response_text: str, batch_indices: list[int]) -> list[
     text = response_text.strip()
     if text.startswith("```"):
         lines = text.split("\n")
-        text = "\n".join(lines[1:-1]) if len(lines) > 2 else text
+        # Strip opening fence (```json or ```) and closing fence (```)
+        start = 1
+        end = len(lines) - 1 if lines[-1].strip() == "```" else len(lines)
+        text = "\n".join(lines[start:end])
 
     try:
         result = json.loads(text)
@@ -244,6 +247,9 @@ def generate_keyframe_notes(
     all_notes: list[ConceptNote] = []
 
     for batch_idx, indices in enumerate(batches):
+        if not indices:
+            logger.warning(f"Batch {batch_idx} has no keyframes, skipping")
+            continue
         if status_callback:
             status_callback(f"Generating notes (batch {batch_idx + 1}/{len(batches)})...")
 

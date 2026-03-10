@@ -13,6 +13,7 @@ Public API:
     get_job_progress(job_id)   -- return list of step strings for a job
 """
 
+import os
 import threading
 import time
 import logging
@@ -232,8 +233,13 @@ def _run_notes_job(job: ProcessingJob, status_callback) -> None:
     else:
         video_url = get_youtube_video_url(source_url)
 
-    # Extract keyframes
+    # Clean up old keyframes directory on regenerate
+    import shutil
     output_dir = f"data/keyframes/{video_id_str}"
+    if os.path.exists(output_dir):
+        shutil.rmtree(output_dir)
+
+    # Extract keyframes
     keyframes = extract_keyframes(video_url, output_dir, note_status)
 
     # Generate notes
@@ -286,6 +292,14 @@ def _run_notes_job(job: ProcessingJob, status_callback) -> None:
             )
             session.add(db_note)
         session.commit()
+
+    # Clean up unreferenced keyframe images
+    referenced_paths = {kf.path for kf in keyframes if kf.is_visual}
+    for fname in os.listdir(output_dir):
+        fpath = os.path.join(output_dir, fname)
+        if fpath not in referenced_paths and fname.endswith(".jpg"):
+            os.remove(fpath)
+            logger.debug(f"Removed unreferenced keyframe: {fpath}")
 
     with get_session() as session:
         j = session.query(ProcessingJob).filter_by(id=job.id).first()

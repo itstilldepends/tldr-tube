@@ -305,17 +305,25 @@ tldr-tube/
 │   ├── transcript.py           # fetch_youtube_transcript(video_id)
 │   ├── whisper.py              # transcribe_audio(audio_path) using mlx-whisper
 │   ├── summarize.py            # summarize_transcript(transcript, video_id)
-│   ├── prompts.py              # PUNCTUATION_RESTORE_PROMPT, SUMMARIZATION_PROMPT
+│   ├── prompts.py              # PUNCTUATION_RESTORE_PROMPT, SUMMARIZATION_PROMPT, NOTE_GENERATION_PROMPT
 │   ├── metadata.py             # fetch_video_metadata(url) using yt-dlp
+│   ├── keyframes.py            # Keyframe extraction pipeline (CV: pHash, SSIM, blur replacement)
+│   ├── keyframe_notes.py       # Concept-based note generation (multimodal LLM)
+│   ├── worker.py               # Background queue worker (video processing + note generation)
 │   └── utils.py                # format_timestamp(seconds), hash_video_id(url)
 │
 ├── db/
-│   ├── models.py               # Collection, Video, Segment (SQLAlchemy)
-│   └── session.py              # engine, Session setup, init_db()
+│   ├── models.py               # Collection, Video, Segment, Keyframe, Note, ProcessingJob (SQLAlchemy)
+│   ├── session.py              # engine, Session setup, init_db()
+│   └── operations.py           # Collection/Job CRUD operations
+│
+├── scripts/
+│   ├── test_keyframes.py       # Keyframe extraction test → HTML report
+│   └── test_notes.py           # Note generation test → HTML report
 │
 ├── data/                       # .gitignored
 │   ├── tldr_tube.db            # SQLite database
-│   └── keyframes/              # Future: video screenshots
+│   └── keyframes/              # Extracted keyframe images
 │       └── {video_id}/
 │
 ├── requirements.txt
@@ -518,9 +526,8 @@ Future: Add `pytest` suite.
 - [ ] **Local file upload**: Upload MP4/MOV, extract audio → Whisper
 - [ ] **S3 support**: Process videos from S3 URLs
 - [ ] **Export summaries**: Download as Markdown or PDF
-- [ ] **Keyframe extraction**: For tutorials, extract screenshots at key moments
-  - Store in `data/keyframes/{video_id}/`
-  - Add `Keyframe` model with `video_id`, `timestamp`, `image_path`
+- [x] **Keyframe note generation**: Extract keyframes + generate bilingual concept-based study notes
+  - Design doc: `NOTE_GENERATION.md`
 - [ ] **Cross-platform Whisper**: Fallback to `openai-whisper` on non-Apple Silicon
 
 ### Medium Priority

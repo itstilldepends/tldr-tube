@@ -106,7 +106,12 @@ screenshots with the teacher's spoken words during each keyframe's time window.
 Organize your notes by **concepts and topics**, NOT one note per keyframe.
 
 - **Group** related keyframes into a single topic (e.g., multiple slides about the same concept, or a scrolling notebook showing one piece of code)
-- **Skip** keyframes that have no useful information (title slides, transitions, repeated content) — do not reference them
+- **Skip** keyframes that add no value — do NOT reference them. Common cases:
+  - Talking head / webcam shots (person speaking without useful visual content)
+  - Black or blank screens, loading screens, transitions
+  - Title slides or section headers with no substantive content
+  - Blurry or unreadable frames — mention "[blurry frame skipped]" so the reader knows content existed here but couldn't be captured
+- **Deduplicate progressive content**: When multiple keyframes show the same slide/code/notebook at different stages (e.g., PPT adding bullets one by one, code executing line by line, notebook scrolling), reference ONLY the most complete version (all bullets visible, final code output, full notebook). Write notes based on that final state. Do NOT repeat content from intermediate frames
 - **Give each topic a short title** that captures the key idea
 - Adapt style to content type:
   - Slides: bullet points with key concepts, definitions, formulas

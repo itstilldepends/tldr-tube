@@ -167,25 +167,17 @@ Last updated: 2026-02-19
 
 ---
 
-#### 4. Keyframe Extraction
-**Status**: Designed, not yet implemented
-**Goal**: Extract key screenshots from local lecture videos and generate structured notes
-**Design doc**: `KEYFRAME_EXTRACTION.md`
+#### 4. Keyframe Note Generation
+**Status**: ✅ Implemented
+**Goal**: Extract keyframes from lecture videos and generate concept-based bilingual study notes
+**Design doc**: `NOTE_GENERATION.md`
 
-**Input**: Local video file + subtitle file (SRT/VTT/Whisper JSON)
-**Output**: Structured notes with timestamp, screenshot, slide content, explanation per keyframe
-
-**Pipeline summary** (see design doc for full details):
-1. ffmpeg 1fps frame extraction
-2. pHash coarse filter (drop near-identical frames)
-3. SSIM fine filter (drop minor-change frames)
-4. Debounce (keep settled state after animations)
-5. Global dedup (merge revisited slides)
-6. Subtitle alignment (window-based text association)
-7. Multimodal LLM slide understanding (batched, cheap model)
-8. LLM note generation (single-pass synthesis)
-
-**Estimate**: ~5-8 hours including calibration
+**Implemented**:
+- CV pipeline: 1fps extraction → pHash → SSIM → debounce → global dedup → blur replacement → talking head filter
+- Multimodal LLM generates bilingual concept-based notes with previous notes context
+- Queue-based processing with progress tracking
+- DB models (Keyframe + Note) with app UI integration
+- "Generate Notes" button in video detail view
 
 ---
 
