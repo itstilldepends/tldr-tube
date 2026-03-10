@@ -122,12 +122,39 @@ def generate_notes_report(
         f.write(html)
 
 
+def run_notes(url, video_id, title, transcript, segments, tldr, duration, keyframes, output_dir, merge_batches=True):
+    """Run note generation with given batch strategy and produce report."""
+    label = "merged" if merge_batches else "per-section"
+    print(f"\n[Phase 2] Generating notes ({label})...")
+    notes = generate_keyframe_notes(
+        keyframes=keyframes,
+        transcript=transcript,
+        video_duration=duration,
+        tldr=tldr,
+        segments=segments,
+        merge_batches=merge_batches,
+        status_callback=lambda msg: print(f"  {msg}")
+    )
+    print(f"  → {len(notes)} concept notes generated")
+    for note in notes:
+        print(f"    - {note.title} ({len(note.keyframes)} keyframes)")
+
+    report_path = os.path.join(output_dir, f"notes_{label}.html")
+    generate_notes_report(f"{title} [{label}]", notes, report_path)
+    return report_path
+
+
 def main():
-    if len(sys.argv) < 2:
-        print("Usage: python scripts/test_notes.py <deeplearning_ai_lesson_url>")
+    # Parse args
+    compare = "--compare" in sys.argv
+    args = [a for a in sys.argv[1:] if not a.startswith("--")]
+
+    if not args:
+        print("Usage: python scripts/test_notes.py <deeplearning_ai_lesson_url> [--compare]")
+        print("  --compare  Generate both merged and per-section reports for comparison")
         sys.exit(1)
 
-    url = sys.argv[1]
+    url = args[0]
     video_id = extract_deeplearning_id(url)
     print(f"Video ID: {video_id}")
 
@@ -156,27 +183,20 @@ def main():
     )
     print(f"  → {len(keyframes)} keyframes ({sum(1 for k in keyframes if k.is_visual)} visual)")
 
-    # Generate notes
-    print("\n[Phase 2] Generating concept-based notes...")
-    notes = generate_keyframe_notes(
-        keyframes=keyframes,
-        transcript=transcript,
-        video_duration=duration,
-        tldr=tldr,
-        segments=segments,
-        status_callback=lambda msg: print(f"  {msg}")
-    )
-    print(f"  → {len(notes)} concept notes generated")
-    for note in notes:
-        print(f"    - {note.title} ({len(note.keyframes)} keyframes)")
-
-    # Generate report
-    report_path = os.path.join(output_dir, "notes_report.html")
-    generate_notes_report(title, notes, report_path)
-
-    print(f"\n{'='*50}")
-    print(f"Done! Notes report: {report_path}")
-    print(f"Open with: open {report_path}")
+    if compare:
+        # Run both strategies on same keyframes
+        report1 = run_notes(url, video_id, title, transcript, segments, tldr, duration, keyframes, output_dir, merge_batches=True)
+        report2 = run_notes(url, video_id, title, transcript, segments, tldr, duration, keyframes, output_dir, merge_batches=False)
+        print(f"\n{'='*50}")
+        print(f"Comparison reports:")
+        print(f"  Merged:      {report1}")
+        print(f"  Per-section: {report2}")
+        print(f"Open both: open {report1} {report2}")
+    else:
+        report_path = run_notes(url, video_id, title, transcript, segments, tldr, duration, keyframes, output_dir, merge_batches=True)
+        print(f"\n{'='*50}")
+        print(f"Done! Notes report: {report_path}")
+        print(f"Open with: open {report_path}")
 
 
 if __name__ == "__main__":

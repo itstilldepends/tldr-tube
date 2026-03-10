@@ -58,6 +58,7 @@ def _migrate_processing_jobs():
             ("order_index", "INTEGER"),
             ("job_type", "VARCHAR(50) DEFAULT 'process_video'"),
             ("target_video_id", "INTEGER"),
+            ("merge_batches", "BOOLEAN DEFAULT 1"),
         ]
         for col, typedef in migrations:
             try:

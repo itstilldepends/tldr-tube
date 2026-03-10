@@ -179,8 +179,9 @@ class ProcessingJob(Base):
     provider = Column(String(50), nullable=True)
     model = Column(String(100), nullable=True)
 
-    # For generate_notes jobs: the video to generate notes for
+    # For generate_notes jobs
     target_video_id = Column(Integer, ForeignKey("videos.id"), nullable=True)
+    merge_batches = Column(Boolean, nullable=True, default=True)  # merge small sections
 
     # Progress & results
     current_step = Column(String(500), nullable=True)   # last step persisted to DB

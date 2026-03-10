@@ -243,6 +243,7 @@ def _run_notes_job(job: ProcessingJob, status_callback) -> None:
     keyframes = extract_keyframes(video_url, output_dir, note_status)
 
     # Generate notes
+    merge = job.merge_batches if job.merge_batches is not None else True
     notes = generate_keyframe_notes(
         keyframes=keyframes,
         transcript=transcript,
@@ -250,6 +251,7 @@ def _run_notes_job(job: ProcessingJob, status_callback) -> None:
         tldr=tldr,
         segments=segments,
         status_callback=note_status,
+        merge_batches=merge,
     )
 
     # Persist to DB

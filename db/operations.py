@@ -275,7 +275,7 @@ def create_job(
     return job
 
 
-def create_notes_job(video_id: int) -> ProcessingJob:
+def create_notes_job(video_id: int, merge_batches: bool = True) -> ProcessingJob:
     """Create a job to generate keyframe notes for an existing video."""
     with get_session() as session:
         video = session.query(Video).filter_by(id=video_id).first()
@@ -286,6 +286,7 @@ def create_notes_job(video_id: int) -> ProcessingJob:
             job_type="generate_notes",
             url=video.source_url,
             target_video_id=video.id,
+            merge_batches=merge_batches,
         )
         session.add(job)
         session.commit()

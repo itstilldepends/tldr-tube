@@ -239,11 +239,14 @@ def render_video_result(video: Video):
         if pending_job:
             st.info("⏳ Note generation in progress — check the Queue tab for status.")
         else:
-            note_col1, note_col2 = st.columns([1, 3])
+            note_col1, note_col2, note_col3 = st.columns([1, 1, 2])
             with note_col1:
                 btn_label = "🔄 Regenerate Notes" if has_notes else "📝 Generate Notes"
                 generate_clicked = st.button(btn_label, key=f"gen_notes_{video.id}")
             with note_col2:
+                merge_batches = st.toggle("Merge sections", value=True, key=f"merge_{video.id}",
+                                          help="Merge small adjacent sections into larger batches for better context continuity and fewer LLM calls. Disable to generate notes per section independently.")
+            with note_col3:
                 if has_notes:
                     st.caption("✅ Notes available — scroll down to view")
                 else:
@@ -254,7 +257,7 @@ def render_video_result(video: Video):
                     st.session_state[f"_confirm_regen_{video.id}"] = True
                     st.rerun()
                 else:
-                    create_notes_job(video.id)
+                    create_notes_job(video.id, merge_batches=merge_batches)
                     st.session_state._nav_redirect = "📋 Queue"
                     st.rerun()
 
@@ -269,7 +272,7 @@ def render_video_result(video: Video):
                 with c2:
                     if st.button("Regenerate", type="primary", key=f"confirm_regen_{video.id}"):
                         del st.session_state[f"_confirm_regen_{video.id}"]
-                        create_notes_job(video.id)
+                        create_notes_job(video.id, merge_batches=merge_batches)
                         st.session_state._nav_redirect = "📋 Queue"
                         st.rerun()
 

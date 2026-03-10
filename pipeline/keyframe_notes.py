@@ -65,37 +65,89 @@ def _align_subtitles(
 def _batch_by_segments(
     keyframes: list[KeyframeInfo],
     segments: list[dict],
+    merge: bool = True,
 ) -> list[list[int]]:
-    """Group keyframe indices by segment time boundaries."""
-    if not segments:
-        indices = list(range(len(keyframes)))
-        if len(indices) > MAX_KEYFRAMES_PER_BATCH:
-            return [indices[i:i + MAX_KEYFRAMES_PER_BATCH]
-                    for i in range(0, len(indices), MAX_KEYFRAMES_PER_BATCH)]
-        return [indices]
+    """Group keyframe indices by segment boundaries, then merge small adjacent batches.
 
-    batches = []
-    for seg in segments:
-        seg_start = seg["start_seconds"]
-        seg_end = seg["end_seconds"]
-        batch = [
-            i for i, kf in enumerate(keyframes)
-            if kf.timestamp >= seg_start and kf.timestamp < seg_end
-        ]
-        if batch:
+    Strategy:
+    1. Split keyframes by segment time boundaries
+    2. Greedily merge adjacent batches while total ≤ MAX_KEYFRAMES_PER_BATCH
+    3. Split any batch still over the limit by count
+
+    This maximizes context per LLM call while respecting token limits.
+    """
+    # Step 1: Split by segments
+    if not segments:
+        raw_batches = [list(range(len(keyframes)))]
+    else:
+        raw_batches = []
+        for seg in segments:
+            seg_start = seg["start_seconds"]
+            seg_end = seg["end_seconds"]
+            batch = [
+                i for i, kf in enumerate(keyframes)
+                if kf.timestamp >= seg_start and kf.timestamp < seg_end
+            ]
+            if batch:
+                raw_batches.append(batch)
+
+        # Catch keyframes outside all segments
+        assigned = {i for batch in raw_batches for i in batch}
+        remaining = [i for i in range(len(keyframes)) if i not in assigned]
+        if remaining:
+            raw_batches.append(remaining)
+
+    if not raw_batches:
+        return [list(range(len(keyframes)))]
+
+    if not merge:
+        # No merging — split oversized batches only
+        final = []
+        for batch in raw_batches:
             if len(batch) > MAX_KEYFRAMES_PER_BATCH:
                 for j in range(0, len(batch), MAX_KEYFRAMES_PER_BATCH):
-                    batches.append(batch[j:j + MAX_KEYFRAMES_PER_BATCH])
+                    final.append(batch[j:j + MAX_KEYFRAMES_PER_BATCH])
             else:
-                batches.append(batch)
+                final.append(batch)
+        return final
 
-    # Catch keyframes outside all segments
-    assigned = {i for batch in batches for i in batch}
-    remaining = [i for i in range(len(keyframes)) if i not in assigned]
-    if remaining:
-        batches.append(remaining)
+    # Step 2: Merge adjacent small batches, keep large sections intact
+    # A section with > half the limit is "large" — give it its own batch
+    # to avoid splitting a cohesive topic across batches
+    merge_threshold = MAX_KEYFRAMES_PER_BATCH // 2  # 7
 
-    return batches
+    merged = []
+    pending: list[int] = []  # small sections accumulating
+
+    for batch in raw_batches:
+        if len(batch) > merge_threshold:
+            # Large section: flush pending small ones first, then add as own batch
+            if pending:
+                merged.append(pending)
+                pending = []
+            merged.append(batch)
+        else:
+            # Small section: try to merge with pending
+            if len(pending) + len(batch) <= MAX_KEYFRAMES_PER_BATCH:
+                pending.extend(batch)
+            else:
+                if pending:
+                    merged.append(pending)
+                pending = list(batch)
+
+    if pending:
+        merged.append(pending)
+
+    # Step 3: Split any batch still over the limit
+    final = []
+    for batch in merged:
+        if len(batch) > MAX_KEYFRAMES_PER_BATCH:
+            for j in range(0, len(batch), MAX_KEYFRAMES_PER_BATCH):
+                final.append(batch[j:j + MAX_KEYFRAMES_PER_BATCH])
+        else:
+            final.append(batch)
+
+    return final
 
 
 def _build_outline(segments: list[dict], current_batch_indices: list[int], keyframes: list[KeyframeInfo]) -> str:
@@ -198,6 +250,7 @@ def generate_keyframe_notes(
     provider: Optional[str] = None,
     model: Optional[str] = None,
     status_callback: Optional[Callable] = None,
+    merge_batches: bool = True,
 ) -> list[ConceptNote]:
     """Generate concept-based notes for keyframes using multimodal LLM.
 
@@ -233,11 +286,12 @@ def generate_keyframe_notes(
     # Align subtitles to visual keyframes
     subtitles = _align_subtitles(visual_keyframes, transcript, video_duration)
 
-    # Batch by segments
+    # Batch strategy: single batch if few enough keyframes, otherwise split by segments
     seg_dicts = [{"start_seconds": s["start_seconds"], "end_seconds": s["end_seconds"],
                   "summary": s.get("summary", "")}
                  for s in segments] if segments else []
-    batches = _batch_by_segments(visual_keyframes, seg_dicts)
+
+    batches = _batch_by_segments(visual_keyframes, seg_dicts, merge=merge_batches)
     logger.info(f"Split into {len(batches)} batches")
 
     # Get LLM client
