@@ -250,7 +250,7 @@ def render_video_result(video: Video):
                 if has_notes:
                     st.caption("✅ Notes available — scroll down to view")
                 else:
-                    st.caption("Extract keyframes and generate concept-based study notes")
+                    st.caption("Extract keyframes from the video and generate concept-based bilingual study notes using a multimodal LLM")
 
             if generate_clicked:
                 if has_notes:

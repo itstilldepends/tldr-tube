@@ -1,7 +1,7 @@
 # Keyframe Extraction & Note Generation
 
 Design doc for the lecture video note-taking pipeline.
-Status: **Frame extraction tested** — note generation not yet implemented.
+Status: **Fully implemented** — frame extraction, note generation, DB persistence, app UI, queue-based processing.
 
 ---
 
@@ -24,12 +24,17 @@ Status: **Frame extraction tested** — note generation not yet implemented.
 - Rationale: structured extraction is lossy — diagrams, formulas, code, layout info all get lost
 - LLM adapts to content type automatically (PPT, code, whiteboard, diagrams)
 
-### Section-based batching with context
-- Use existing `segment` time boundaries to batch keyframes for LLM calls
-- Each batch = one section's keyframes + subtitle windows
+### Smart batch merging with context
+- Use existing `segment` time boundaries to initially group keyframes
+- **Merge strategy** (default, toggleable in UI):
+  - Small adjacent sections (≤7 frames each) are greedily merged up to 15 frames per batch
+  - Large sections (>7 frames) stay intact as their own batch
+  - Maximizes context per LLM call while respecting token limits
+  - Reduces total LLM calls and improves cross-section coherence
+- **Per-section mode** (optional): each segment becomes its own batch, no merging
 - Every batch includes TL;DR + all section summaries as a lightweight "outline" (~400 tokens)
 - LLM knows where this section fits in the overall video without receiving full transcript
-- If a section has >15 keyframes, split by count within the section
+- If any batch exceeds 15 keyframes, it is split further by count
 
 ### Talking head filtering
 - Keyframes with Laplacian sharpness < 600 are classified as "talking head" (no useful visual content)
@@ -139,17 +144,27 @@ This is better than searching existing 1fps frames because:
 1. Remove talking head frames (sharpness < 600), keep only visual keyframes
 2. Align subtitles: each visual keyframe gets all transcript text from its timestamp to the next visual keyframe's timestamp (talking head subtitle text naturally merges into adjacent visual frames)
 
-#### Step 8 — Section-based batching
+#### Step 8 — Smart batch merging
 
-Group visual keyframes by existing segment time boundaries:
+Group visual keyframes by segment boundaries, then merge small adjacent batches:
 
 ```
-Segment 1 (00:00–15:30) → [keyframe_0, keyframe_1, ..., keyframe_7]
-Segment 2 (15:30–32:00) → [keyframe_8, ..., keyframe_13]
-...
+Raw segments:
+  Segment 1 (00:00–05:00) → [kf_0, kf_1, kf_2]           (3 frames, small)
+  Segment 2 (05:00–10:00) → [kf_3, kf_4]                  (2 frames, small)
+  Segment 3 (10:00–25:00) → [kf_5, ..., kf_14]            (10 frames, large)
+  Segment 4 (25:00–30:00) → [kf_15, kf_16]                (2 frames, small)
+
+After merge (default):
+  Batch 1: [kf_0, ..., kf_4]    (segments 1+2 merged, 5 frames)
+  Batch 2: [kf_5, ..., kf_14]   (segment 3 alone, large section stays intact)
+  Batch 3: [kf_15, kf_16]       (segment 4, too small to merge with batch 2)
+
+Per-section mode (no merge):
+  Batch 1: [kf_0, kf_1, kf_2]   Batch 2: [kf_3, kf_4]   Batch 3: [kf_5, ..., kf_14]   Batch 4: [kf_15, kf_16]
 ```
 
-If a segment has > 15 visual keyframes, split further by count.
+Users can toggle between strategies via "Merge sections" in the UI.
 
 #### Step 9 — LLM concept-based note generation (per batch)
 
@@ -281,14 +296,16 @@ ffmpeg                 # frame extraction (CLI)
    - Ported from `scripts/test_keyframes.py`, validated on test video
 
 2. ✅ **`pipeline/keyframe_notes.py`** — Note generation (Steps 7–9)
-   - Subtitle alignment, section-based batching, concept-based bilingual notes
+   - Subtitle alignment, smart batch merging, concept-based bilingual notes
    - Previous notes context passed to each batch for continuity
+   - `merge_batches` toggle: merge small sections (default) or keep per-section
    - Tested end-to-end, produces quality bilingual notes
 
 3. ✅ **`db/models.py`** — `Keyframe` + `Note` models, `ProcessingJob.job_type` for queue
 
 4. ✅ **`app.py`** — UI integration
    - "Generate Notes" button (queue-based, non-blocking)
+   - "Merge sections" toggle with descriptive tooltip
    - Regenerate confirmation dialog
    - Notes display with keyframe images + bilingual tabs
    - Progress visible in Queue view
@@ -301,4 +318,5 @@ ffmpeg                 # frame extraction (CLI)
 ```bash
 python scripts/test_keyframes.py <deeplearning_ai_lesson_url>
 python scripts/test_notes.py <deeplearning_ai_lesson_url>
+python scripts/test_notes.py <deeplearning_ai_lesson_url> --compare  # side-by-side merged vs per-section
 ```

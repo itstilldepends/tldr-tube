@@ -35,6 +35,8 @@ Save time taking notes on YouTube and Bilibili videos with AI-powered, timestamp
 - Generate concept-based study notes from lecture videos
 - CV pipeline extracts keyframes (pHash + SSIM filtering, blur replacement, talking head detection)
 - Multimodal LLM organizes notes by topics, not by individual frames
+- Smart batch merging: small sections merged for better coherence, large sections kept intact
+- "Merge sections" toggle lets you compare strategies per video
 - Bilingual output (English + 中文), queue-based processing
 
 ✅ **Export**
@@ -157,6 +159,7 @@ Then select **Ollama (Local)** as the provider in the app. No `.env` changes nee
 
 1. Open a processed video from the **Library**
 2. Scroll to **Generate Study Notes** and click **📝 Generate Notes**
+   - **Merge sections** (on by default): merges small adjacent sections for better context continuity and fewer LLM calls. Turn off to generate notes per section independently.
 3. The job runs in the background — check **📋 Queue** for progress
 4. Notes appear at the bottom of the video detail page with keyframe images
 
