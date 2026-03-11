@@ -67,7 +67,7 @@ def fetch_video_info(url: str) -> dict:
     return {
         "video_id": lesson_slug,
         "title": title,
-        "hls_url": video_data["mp4Url"],  # actually m3u8
+        "hls_url": video_data["mp4Url"].strip(),  # actually m3u8
         "mp4_360p_url": video_data.get("mp4360pUrl", ""),
     }
 
