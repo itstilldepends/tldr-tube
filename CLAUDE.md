@@ -326,7 +326,7 @@ tldr-tube/
 │   └── keyframes/              # Extracted keyframe images
 │       └── {video_id}/
 │
-├── requirements.txt
+├── pyproject.toml              # Dependencies & project config
 ├── .env.example
 ├── .gitignore
 ├── CLAUDE.md                   # This file
@@ -461,19 +461,9 @@ Add `.env` to `.gitignore`.
 
 ---
 
-## Dependencies (requirements.txt)
+## Dependencies (pyproject.toml)
 
-```
-streamlit>=1.30.0
-youtube-transcript-api>=0.6.0
-mlx-whisper>=0.3.0
-anthropic>=0.18.0
-yt-dlp>=2024.0.0
-python-dotenv>=1.0.0
-sqlalchemy>=2.0.0
-```
-
-**Platform Note**: `mlx-whisper` only works on macOS with Apple Silicon (M1/M2/M3). Cross-platform support is a future TODO.
+All dependencies are declared in `pyproject.toml`. `mlx-whisper` (Apple Silicon only) is an optional dependency under `[project.optional-dependencies] asr`.
 
 ---
 
@@ -484,12 +474,12 @@ sqlalchemy>=2.0.0
 # Clone/create project
 cd tldr-tube
 
-# Create virtual environment
-python3.11 -m venv venv
-source venv/bin/activate
+# Create conda environment
+conda create -n tldr-tube python=3.11 -y
+conda activate tldr-tube
 
-# Install dependencies
-pip install -r requirements.txt
+# Install dependencies (editable mode + ASR support)
+pip install -e ".[asr]"
 
 # Set up environment
 cp .env.example .env

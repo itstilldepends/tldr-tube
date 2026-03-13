@@ -284,7 +284,7 @@ tldr-tube/
 │   ├── worker.py           # Background queue worker
 │   └── config.py           # Provider configuration
 ├── data/                   # SQLite database (gitignored)
-├── requirements.txt
+├── pyproject.toml          # Dependencies & project config
 ├── .env.example
 ├── CLAUDE.md               # Development guide
 └── README.md               # This file

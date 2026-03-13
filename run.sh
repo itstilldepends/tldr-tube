@@ -33,12 +33,10 @@ echo -e "${GREEN}🔄 Activating conda environment...${NC}"
 source "$(conda info --base)/etc/profile.d/conda.sh"
 conda activate tldr-tube
 
-# 4. Check if dependencies are installed
-if ! python -c "import streamlit" &> /dev/null; then
-    echo -e "${YELLOW}⚠️  Dependencies not installed, installing...${NC}"
-    pip install -r requirements.txt
-    echo -e "${GREEN}✅ Dependencies installed${NC}"
-fi
+# 4. Install/update dependencies
+echo -e "${GREEN}🔄 Checking dependencies...${NC}"
+pip install -e ".[asr]" --quiet
+echo -e "${GREEN}✅ Dependencies up to date${NC}"
 
 # 5. Check if .env file exists
 if [ ! -f .env ]; then
