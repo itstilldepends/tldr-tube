@@ -14,11 +14,21 @@ NC='\033[0m' # No Color
 echo -e "${GREEN}🎬 tldr-tube Startup Script${NC}"
 echo "================================"
 
-# 1. Check if conda is installed
+# 1. Check system dependencies
 if ! command -v conda &> /dev/null; then
     echo -e "${RED}❌ Conda not found${NC}"
     echo "Please install Miniconda first: brew install --cask miniconda"
     exit 1
+fi
+
+if ! command -v ffmpeg &> /dev/null; then
+    echo -e "${YELLOW}⚠️  ffmpeg not found, installing via Homebrew...${NC}"
+    if ! command -v brew &> /dev/null; then
+        echo -e "${RED}❌ Homebrew not found. Install ffmpeg manually: https://ffmpeg.org${NC}"
+        exit 1
+    fi
+    brew install ffmpeg
+    echo -e "${GREEN}✅ ffmpeg installed${NC}"
 fi
 
 # 2. Check if conda environment exists
