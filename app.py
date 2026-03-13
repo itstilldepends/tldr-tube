@@ -125,10 +125,11 @@ def render_video_result(video: Video):
     """
     # Header with metadata
     icon = _PLATFORM_ICONS.get(video.source_type, "▶️")
+    platform = _PLATFORM_NAMES.get(video.source_type, "YouTube")
     st.markdown(f"## {icon} {video.title}")
 
     # Basic metadata row
-    col1, col2, col3, col4 = st.columns(4)
+    col1, col2, col3, col4, col5 = st.columns(5)
     with col1:
         st.caption(f"📺 {video.channel_name}")
     with col2:
@@ -141,6 +142,8 @@ def render_video_result(video: Video):
             st.caption(f"⏱️ {duration_min}:{duration_sec:02d}")
     with col4:
         st.caption(f"📝 {video.transcript_source}")
+    with col5:
+        st.markdown(f"[{icon} Watch on {platform}]({video.source_url})")
 
     # Tags (if available)
     if video.tags:
@@ -543,7 +546,13 @@ def view_new_video():
 
 def view_history():
     """Render the History view with all videos and collections."""
-    st.title("📚 Library")
+    # Dynamic title based on current view state
+    if st.session_state.get("selected_video_id"):
+        st.title("🎬 Video Detail")
+    elif st.session_state.get("selected_collection_id"):
+        st.title("📂 Collection")
+    else:
+        st.title("📚 Library")
 
     # Handle delete video confirmation (at top for visibility)
     if st.session_state.get("confirm_delete_video_id"):
@@ -606,6 +615,161 @@ def view_history():
         st.info("No videos processed yet. Process your first video from the sidebar!")
         return
 
+    # Show selected video detail (replaces library list)
+    if st.session_state.get("selected_video_id"):
+        video_id = st.session_state.selected_video_id
+        # Determine back target: collection or library
+        back_collection_id = st.session_state.get("_back_to_collection")
+        back_label = "← Back to Collection" if back_collection_id else "← Back to Library"
+
+        def _back_from_video():
+            del st.session_state.selected_video_id
+            if not back_collection_id and "_back_to_collection" in st.session_state:
+                del st.session_state._back_to_collection
+
+        with get_session() as session:
+            video = session.query(Video).filter_by(id=video_id).first()
+
+        if video:
+            if st.button(back_label):
+                _back_from_video()
+                st.rerun()
+            render_video_result(video)
+            if st.button(back_label, key="back_bottom"):
+                _back_from_video()
+                st.rerun()
+            return
+
+    # Show selected collection detail (replaces library list)
+    if st.session_state.get("selected_collection_id"):
+        col_id = st.session_state.selected_collection_id
+        with get_session() as session:
+            from sqlalchemy.orm import joinedload
+            collection = (
+                session.query(Collection)
+                .options(joinedload(Collection.videos))
+                .filter_by(id=col_id)
+                .first()
+            )
+            if collection:
+                videos_in_col = sorted(collection.videos, key=lambda v: v.order_index or 0)
+                session.expunge_all()
+
+        if collection:
+            if st.button("← Back to Library"):
+                del st.session_state.selected_collection_id
+                st.rerun()
+
+            st.markdown(f"### 📂 {collection.title} ({len(videos_in_col)} videos)")
+            if collection.description:
+                st.info(collection.description)
+
+            if videos_in_col:
+                # Note generation status
+                with get_session() as session:
+                    videos_with_notes = {
+                        v.id for v in videos_in_col
+                        if session.query(Note).filter_by(video_id=v.id).count() > 0
+                    }
+                    videos_with_pending = {
+                        v.id for v in videos_in_col
+                        if session.query(ProcessingJob)
+                        .filter_by(target_video_id=v.id, job_type="generate_notes")
+                        .filter(ProcessingJob.status.in_(["pending", "processing"]))
+                        .first()
+                    }
+
+                eligible = [v for v in videos_in_col
+                            if v.source_type in ("youtube", "deeplearning_ai")
+                            and v.id not in videos_with_pending]
+                without_notes = [v for v in eligible if v.id not in videos_with_notes]
+                with_notes = [v for v in eligible if v.id in videos_with_notes]
+
+                # Action toolbar
+                action_buttons = []
+                if eligible and without_notes:
+                    action_buttons.append(("gen", f"📝 Generate Notes ({len(without_notes)})"))
+                if eligible and with_notes:
+                    action_buttons.append(("regen", f"🔄 Regenerate All Notes ({len(eligible)})"))
+                action_buttons.append(("delete", "🗑️ Delete Collection"))
+
+                cols = st.columns(len(action_buttons))
+                for col, (action, label) in zip(cols, action_buttons):
+                    with col:
+                        if st.button(label, key=f"{action}_{collection.id}", use_container_width=True):
+                            if action == "gen":
+                                for v in without_notes:
+                                    create_notes_job(v.id)
+                                st.session_state._nav_redirect = "📋 Queue"
+                                st.rerun()
+                            elif action == "regen":
+                                st.session_state[f"_confirm_regen_col_{collection.id}"] = True
+                                st.rerun()
+                            elif action == "delete":
+                                st.session_state.confirm_delete_collection_id = collection.id
+                                del st.session_state.selected_collection_id
+                                st.rerun()
+
+                if st.session_state.get(f"_confirm_regen_col_{collection.id}"):
+                    st.warning(f"This will regenerate notes for all {len(eligible)} videos. Existing notes will be replaced.")
+                    c1, c2 = st.columns(2)
+                    with c1:
+                        if st.button("Cancel", key=f"cancel_regen_col_{collection.id}"):
+                            del st.session_state[f"_confirm_regen_col_{collection.id}"]
+                            st.rerun()
+                    with c2:
+                        if st.button("Regenerate All", type="primary", key=f"confirm_regen_col_{collection.id}"):
+                            del st.session_state[f"_confirm_regen_col_{collection.id}"]
+                            for v in eligible:
+                                create_notes_job(v.id)
+                            st.session_state._nav_redirect = "📋 Queue"
+                            st.rerun()
+
+                st.markdown("---")
+
+                # Video list
+                for idx, video in enumerate(videos_in_col):
+                    note_badge = " ✅" if video.id in videos_with_notes else ""
+                    st.markdown(f"**{idx + 1}. {video.title}**{note_badge}")
+                    st.caption(video.tldr[:150] + "..." if len(video.tldr) > 150 else video.tldr)
+
+                    col1, col2, col3, col4, col5 = st.columns([2, 1, 1, 1, 1])
+                    with col1:
+                        if st.button("📄 View", key=f"view_col_{video.id}"):
+                            st.session_state.selected_video_id = video.id
+                            st.session_state._back_to_collection = collection.id
+                            st.rerun()
+                    with col2:
+                        if st.button("⬆️ Up", key=f"up_{video.id}", disabled=(idx == 0)):
+                            if move_video_in_collection(video.id, "up"):
+                                st.rerun()
+                    with col3:
+                        if st.button("⬇️ Down", key=f"down_{video.id}", disabled=(idx == len(videos_in_col) - 1)):
+                            if move_video_in_collection(video.id, "down"):
+                                st.rerun()
+                    with col4:
+                        if st.button("➖ Remove", key=f"remove_{video.id}"):
+                            if remove_video_from_collection(video.id):
+                                st.toast("Removed from collection")
+                                st.rerun()
+                    with col5:
+                        if st.button("🗑️", key=f"del_col_{video.id}"):
+                            st.session_state.confirm_delete_video_id = video.id
+                            st.rerun()
+
+                    st.markdown("")
+            else:
+                st.info("No videos in this collection.")
+                if st.button("🗑️ Delete Collection", key=f"del_collection_{collection.id}"):
+                    st.session_state.confirm_delete_collection_id = collection.id
+                    del st.session_state.selected_collection_id
+                    st.rerun()
+
+            if st.button("← Back to Library", key="back_col_bottom"):
+                del st.session_state.selected_collection_id
+                st.rerun()
+            return
+
     # Search functionality
     st.markdown("### 🔍 Search")
     search_query = st.text_input(
@@ -653,53 +817,27 @@ def view_history():
 
     # Display collections
     if collections:
-        st.markdown("### 📚 Collections")
+        st.markdown("### 📂 Collections")
         for collection in collections:
-            with st.expander(f"📚 {collection.title} ({len(collection.videos)} videos)", expanded=False):
+            with st.expander(f"📂 {collection.title} ({len(collection.videos)} videos)", expanded=False):
                 if collection.description:
-                    st.info(collection.description)
+                    st.caption(collection.description)
 
+                # Show first few video titles as preview
                 if collection.videos:
-                    # Display videos in order
-                    sorted_videos = sorted(collection.videos, key=lambda v: v.order_index or 0)
-                    for idx, video in enumerate(sorted_videos):
-                        st.markdown(f"**{idx + 1}. {video.title}**")
-                        st.caption(video.tldr[:150] + "..." if len(video.tldr) > 150 else video.tldr)
+                    sorted_vids = sorted(collection.videos, key=lambda v: v.order_index or 0)
+                    preview = ", ".join(v.title for v in sorted_vids[:3])
+                    if len(sorted_vids) > 3:
+                        preview += f", ... (+{len(sorted_vids) - 3} more)"
+                    st.markdown(preview)
 
-                        col1, col2, col3, col4, col5 = st.columns([2, 1, 1, 1, 1])
-                        with col1:
-                            if st.button("📄 View", key=f"view_col_{video.id}"):
-                                st.session_state.selected_video_id = video.id
-                                st.rerun()
-                        with col2:
-                            # Move up button (disabled if first)
-                            if st.button("⬆️ Up", key=f"up_{video.id}", disabled=(idx == 0)):
-                                if move_video_in_collection(video.id, "up"):
-                                    st.rerun()
-                        with col3:
-                            # Move down button (disabled if last)
-                            if st.button("⬇️ Down", key=f"down_{video.id}", disabled=(idx == len(sorted_videos) - 1)):
-                                if move_video_in_collection(video.id, "down"):
-                                    st.rerun()
-                        with col4:
-                            if st.button("➖ Remove", key=f"remove_{video.id}"):
-                                if remove_video_from_collection(video.id):
-                                    st.success(f"✅ Removed from collection")
-                                    st.rerun()
-                        with col5:
-                            if st.button("🗑️", key=f"del_col_{video.id}"):
-                                st.session_state.confirm_delete_video_id = video.id
-                                st.rerun()
-
-                        st.markdown("")  # Spacing
-                else:
-                    st.info("No videos in this collection. Add videos from Standalone Videos below.")
-
-                st.markdown("---")
-                # Delete collection button
-                col1, col2, col3 = st.columns([1, 1, 3])
+                col1, col2 = st.columns(2)
                 with col1:
-                    if st.button(f"🗑️ Delete Collection", key=f"del_collection_{collection.id}"):
+                    if st.button("📄 View Collection", key=f"open_col_{collection.id}", use_container_width=True):
+                        st.session_state.selected_collection_id = collection.id
+                        st.rerun()
+                with col2:
+                    if st.button("🗑️ Delete", key=f"del_col_list_{collection.id}", use_container_width=True):
                         st.session_state.confirm_delete_collection_id = collection.id
                         st.rerun()
 
@@ -743,19 +881,6 @@ def view_history():
                         st.session_state.confirm_delete_video_id = video.id
                         st.rerun()
 
-    # Handle view selected video
-    if st.session_state.get("selected_video_id"):
-        video_id = st.session_state.selected_video_id
-        with get_session() as session:
-            video = session.query(Video).filter_by(id=video_id).first()
-
-        if video:
-            st.markdown("---")
-            render_video_result(video)
-
-            if st.button("← Back to Library"):
-                del st.session_state.selected_video_id
-                st.rerun()
 
 
 
@@ -796,9 +921,9 @@ def view_new_collection():
     # Show existing collections
     collections = get_all_collections()
     if collections:
-        st.markdown("### 📚 Existing Collections")
+        st.markdown("### 📂 Existing Collections")
         for col in collections:
-            with st.expander(f"📚 {col.title} ({len(col.videos)} videos)"):
+            with st.expander(f"📂 {col.title} ({len(col.videos)} videos)"):
                 if col.description:
                     st.markdown(f"**Description:** {col.description}")
                 st.caption(f"Created: {col.created_at.strftime('%Y-%m-%d %H:%M')}")
@@ -943,7 +1068,7 @@ def view_ask_ai():
 
         # Collections
         if collections:
-            st.markdown("### 📚 Collections")
+            st.markdown("### 📂 Collections")
             for collection in collections:
                 with st.container():
                     # Collection-level checkbox
@@ -951,7 +1076,7 @@ def view_ask_ai():
                     all_selected = all(vid in st.session_state.rag_selected_videos for vid in collection_video_ids)
 
                     col_selected = st.checkbox(
-                        f"📚 {collection.title} ({len(collection.videos)} videos)",
+                        f"📂 {collection.title} ({len(collection.videos)} videos)",
                         value=all_selected,
                         key=f"coll_checkbox_{collection.id}"
                     )
