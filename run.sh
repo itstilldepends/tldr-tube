@@ -14,6 +14,16 @@ NC='\033[0m' # No Color
 echo -e "${GREEN}🎬 tldr-tube Startup Script${NC}"
 echo "================================"
 
+# 0. Pull latest updates
+if [ -d .git ]; then
+    echo -e "${GREEN}🔄 Checking for updates...${NC}"
+    if git pull --quiet 2>/dev/null; then
+        echo -e "${GREEN}✅ Up to date${NC}"
+    else
+        echo -e "${YELLOW}⚠️  Could not pull updates (offline or merge conflict). Continuing with current version.${NC}"
+    fi
+fi
+
 # 1. Check system dependencies
 if ! command -v conda &> /dev/null; then
     echo -e "${RED}❌ Conda not found${NC}"
