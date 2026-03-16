@@ -622,6 +622,23 @@ def view_history():
         back_collection_id = st.session_state.get("_back_to_collection")
         back_label = "← Back to Collection" if back_collection_id else "← Back to Library"
 
+        # Get prev/next videos if inside a collection
+        prev_video_id = None
+        next_video_id = None
+        if back_collection_id:
+            with get_session() as session:
+                from sqlalchemy.orm import joinedload as _jl
+                col = session.query(Collection).options(_jl(Collection.videos)).filter_by(id=back_collection_id).first()
+                if col and col.videos:
+                    sorted_vids = sorted(col.videos, key=lambda v: v.order_index or 0)
+                    vid_ids = [v.id for v in sorted_vids]
+                    if video_id in vid_ids:
+                        idx = vid_ids.index(video_id)
+                        if idx > 0:
+                            prev_video_id = vid_ids[idx - 1]
+                        if idx < len(vid_ids) - 1:
+                            next_video_id = vid_ids[idx + 1]
+
         def _back_from_video():
             del st.session_state.selected_video_id
             if not back_collection_id and "_back_to_collection" in st.session_state:
@@ -631,13 +648,47 @@ def view_history():
             video = session.query(Video).filter_by(id=video_id).first()
 
         if video:
-            if st.button(back_label):
-                _back_from_video()
-                st.rerun()
+            # Top navigation bar
+            if back_collection_id:
+                col_back, col_prev, col_next = st.columns([3, 1, 1])
+                with col_back:
+                    if st.button(back_label):
+                        _back_from_video()
+                        st.rerun()
+                with col_prev:
+                    if st.button("← Prev Video", disabled=prev_video_id is None, use_container_width=True):
+                        st.session_state.selected_video_id = prev_video_id
+                        st.rerun()
+                with col_next:
+                    if st.button("Next Video →", disabled=next_video_id is None, use_container_width=True):
+                        st.session_state.selected_video_id = next_video_id
+                        st.rerun()
+            else:
+                if st.button(back_label):
+                    _back_from_video()
+                    st.rerun()
+
             render_video_result(video)
-            if st.button(back_label, key="back_bottom"):
-                _back_from_video()
-                st.rerun()
+
+            # Bottom navigation bar
+            if back_collection_id:
+                col_back, col_prev, col_next = st.columns([2, 1, 1])
+                with col_back:
+                    if st.button(back_label, key="back_bottom"):
+                        _back_from_video()
+                        st.rerun()
+                with col_prev:
+                    if st.button("←", key="prev_bottom", disabled=prev_video_id is None, use_container_width=True):
+                        st.session_state.selected_video_id = prev_video_id
+                        st.rerun()
+                with col_next:
+                    if st.button("→", key="next_bottom", disabled=next_video_id is None, use_container_width=True):
+                        st.session_state.selected_video_id = next_video_id
+                        st.rerun()
+            else:
+                if st.button(back_label, key="back_bottom"):
+                    _back_from_video()
+                    st.rerun()
             return
 
     # Show selected collection detail (replaces library list)
