@@ -99,8 +99,8 @@ def get_deeplearning_video_url(page_url: str) -> str:
 def get_video_stream_url(video_url: str) -> str:
     """Get a direct video stream URL using yt-dlp.
 
-    Works with YouTube, Bilibili, and any yt-dlp supported site.
-    Returns a URL that ffmpeg can consume directly (no download needed).
+    Works with YouTube and other sites where ffmpeg can access the stream directly.
+    Returns a URL that ffmpeg can consume (no download needed).
     """
     import yt_dlp
 
@@ -113,6 +113,36 @@ def get_video_stream_url(video_url: str) -> str:
     with yt_dlp.YoutubeDL(ydl_opts) as ydl:
         info = ydl.extract_info(video_url, download=False)
         return info["url"]
+
+
+def download_video_for_keyframes(video_url: str, output_dir: str) -> str:
+    """Download video to a local file for keyframe extraction.
+
+    Used for sites like Bilibili where stream URLs require auth headers
+    that ffmpeg cannot provide directly.
+
+    Returns path to the downloaded video file.
+    """
+    import yt_dlp
+
+    os.makedirs(output_dir, exist_ok=True)
+    output_path = os.path.join(output_dir, "video.mp4")
+
+    ydl_opts = {
+        "format": "bestvideo[height<=720][ext=mp4]+bestaudio[ext=m4a]/best[height<=720]",
+        "outtmpl": output_path,
+        "quiet": True,
+        "no_warnings": True,
+        "merge_output_format": "mp4",
+    }
+
+    with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+        ydl.download([video_url])
+
+    if not os.path.exists(output_path):
+        raise RuntimeError(f"Video download failed: {output_path} not found")
+
+    return output_path
 
 
 # Backward-compatible alias

@@ -203,7 +203,7 @@ def _run_notes_job(job: ProcessingJob, status_callback) -> None:
     """Generate keyframe notes for an existing video."""
     import json
     from db.models import Video, Segment, Keyframe, Note
-    from pipeline.keyframes import extract_keyframes, get_deeplearning_video_url, get_video_stream_url
+    from pipeline.keyframes import extract_keyframes, get_deeplearning_video_url, get_video_stream_url, download_video_for_keyframes
     from pipeline.keyframe_notes import generate_keyframe_notes
 
     def note_status(msg: str):
@@ -226,21 +226,31 @@ def _run_notes_job(job: ProcessingJob, status_callback) -> None:
             for s in session.query(Segment).filter_by(video_id=video.id).order_by(Segment.start_seconds).all()
         ]
 
-    # Get video stream URL
-    note_status("Fetching video stream URL...")
-    if source_type == "deeplearning_ai":
-        video_url = get_deeplearning_video_url(source_url)
-    else:
-        video_url = get_video_stream_url(source_url)
-
     # Clean up old keyframes directory on regenerate
     import shutil
     output_dir = f"data/keyframes/{video_id_str}"
     if os.path.exists(output_dir):
         shutil.rmtree(output_dir)
 
+    # Get video URL for keyframe extraction
+    downloaded_video = None
+    if source_type == "deeplearning_ai":
+        note_status("Fetching video stream URL...")
+        video_url = get_deeplearning_video_url(source_url)
+    elif source_type == "bilibili":
+        note_status("Downloading video for keyframe extraction...")
+        video_url = download_video_for_keyframes(source_url, output_dir)
+        downloaded_video = video_url
+    else:
+        note_status("Fetching video stream URL...")
+        video_url = get_video_stream_url(source_url)
+
     # Extract keyframes
     keyframes = extract_keyframes(video_url, output_dir, note_status)
+
+    # Clean up downloaded video file (Bilibili)
+    if downloaded_video and os.path.exists(downloaded_video):
+        os.remove(downloaded_video)
 
     # Generate notes
     merge = job.merge_batches if job.merge_batches is not None else True
