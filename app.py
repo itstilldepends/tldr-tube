@@ -225,7 +225,7 @@ def render_video_result(video: Video):
         st.caption("💡 Markdown files can be opened in Notion, Obsidian, or any text editor")
 
     # Generate Notes section
-    if video.source_type in ("youtube", "deeplearning_ai"):
+    if video.source_type in ("youtube", "bilibili", "deeplearning_ai"):
         st.markdown("---")
         st.markdown("### 📝 Generate Study Notes")
 
@@ -731,7 +731,7 @@ def view_history():
                     }
 
                 eligible = [v for v in videos_in_col
-                            if v.source_type in ("youtube", "deeplearning_ai")
+                            if v.source_type in ("youtube", "bilibili", "deeplearning_ai")
                             and v.id not in videos_with_pending]
                 without_notes = [v for v in eligible if v.id not in videos_with_notes]
                 with_notes = [v for v in eligible if v.id in videos_with_notes]

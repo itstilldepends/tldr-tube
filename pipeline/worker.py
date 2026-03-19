@@ -203,7 +203,7 @@ def _run_notes_job(job: ProcessingJob, status_callback) -> None:
     """Generate keyframe notes for an existing video."""
     import json
     from db.models import Video, Segment, Keyframe, Note
-    from pipeline.keyframes import extract_keyframes, get_deeplearning_video_url, get_youtube_video_url
+    from pipeline.keyframes import extract_keyframes, get_deeplearning_video_url, get_video_stream_url
     from pipeline.keyframe_notes import generate_keyframe_notes
 
     def note_status(msg: str):
@@ -231,7 +231,7 @@ def _run_notes_job(job: ProcessingJob, status_callback) -> None:
     if source_type == "deeplearning_ai":
         video_url = get_deeplearning_video_url(source_url)
     else:
-        video_url = get_youtube_video_url(source_url)
+        video_url = get_video_stream_url(source_url)
 
     # Clean up old keyframes directory on regenerate
     import shutil

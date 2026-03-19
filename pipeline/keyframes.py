@@ -96,15 +96,16 @@ def get_deeplearning_video_url(page_url: str) -> str:
     raise Exception("Could not find video URL in page data")
 
 
-def get_youtube_video_url(video_url: str) -> str:
-    """Get a direct video stream URL from YouTube using yt-dlp.
+def get_video_stream_url(video_url: str) -> str:
+    """Get a direct video stream URL using yt-dlp.
 
+    Works with YouTube, Bilibili, and any yt-dlp supported site.
     Returns a URL that ffmpeg can consume directly (no download needed).
     """
     import yt_dlp
 
     ydl_opts = {
-        "format": "bestvideo[height<=720][ext=mp4]/best[height<=720]",
+        "format": "bestvideo[height<=720][ext=mp4]/bestvideo[height<=720]/best[height<=720]",
         "quiet": True,
         "no_warnings": True,
     }
@@ -112,6 +113,10 @@ def get_youtube_video_url(video_url: str) -> str:
     with yt_dlp.YoutubeDL(ydl_opts) as ydl:
         info = ydl.extract_info(video_url, download=False)
         return info["url"]
+
+
+# Backward-compatible alias
+get_youtube_video_url = get_video_stream_url
 
 
 # ── Frame extraction ────────────────────────────────────────────────────────
