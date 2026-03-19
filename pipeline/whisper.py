@@ -11,7 +11,6 @@ Cross-platform support (openai-whisper) is a future TODO.
 import os
 os.environ.setdefault("TOKENIZERS_PARALLELISM", "false")
 
-import mlx_whisper
 from typing import List, Dict
 
 from pipeline.config import WHISPER_MODELS, DEFAULT_WHISPER_MODEL
@@ -54,6 +53,12 @@ def transcribe_audio(audio_path: str, language: str = None, model: str = None) -
     model_path = WHISPER_MODELS[model]["name"]
 
     try:
+        import mlx_whisper
+    except ImportError:
+        raise ImportError(
+            "mlx-whisper is required for audio transcription but is not installed. "
+            "Install with: pip install mlx-whisper (Apple Silicon only)"
+        )
         result = mlx_whisper.transcribe(
             audio_path,
             path_or_hf_repo=model_path,
